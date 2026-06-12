@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod diff;
 pub mod github;
 pub mod model;
