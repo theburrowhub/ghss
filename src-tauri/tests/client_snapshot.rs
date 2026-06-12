@@ -68,6 +68,33 @@ async fn fetch_snapshot_combines_all_sources() {
 }
 
 #[tokio::test]
+async fn fetch_snapshot_ruleset_only_protected_branch_skips_404() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET")).and(path("/repos/acme/ref"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "full_name": "acme/ref", "default_branch": "main"
+        })))
+        .mount(&server).await;
+    Mock::given(method("GET")).and(path("/repos/acme/ref/branches"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+            {"name": "feat", "protected": true}
+        ])))
+        .mount(&server).await;
+    Mock::given(method("GET")).and(path("/repos/acme/ref/rulesets"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([])))
+        .mount(&server).await;
+    Mock::given(method("GET")).and(path("/repos/acme/ref/branches/feat/protection"))
+        .respond_with(ResponseTemplate::new(404).set_body_json(json!({"message": "Branch not protected"})))
+        .mount(&server).await;
+
+    let client = GithubClient::new(server.uri(), "tok".into());
+    let snap = client.fetch_snapshot("acme", "ref").await.unwrap();
+
+    assert_eq!(snap.branches, vec!["feat".to_string()]);
+    assert!(snap.branch_protections.is_empty(), "la rama protegida solo por rulesets no aporta protección clásica");
+}
+
+#[tokio::test]
 async fn write_methods_hit_expected_endpoints() {
     let server = MockServer::start().await;
     Mock::given(method("PATCH")).and(path("/repos/acme/t1")).and(body_json(json!({"has_wiki": true})))

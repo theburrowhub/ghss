@@ -1,6 +1,7 @@
-use super::client::{GhResult, GithubClient};
+use super::client::{GhError, GhResult, GithubClient};
 use super::transform::{normalize_ruleset, protection_get_to_put};
 use crate::model::*;
+use reqwest::StatusCode;
 use serde_json::Value;
 
 impl GithubClient {
@@ -10,10 +11,9 @@ impl GithubClient {
         let mut branches = Vec::new();
         let mut protected = Vec::new();
         for page in 1.. {
-            let batch: Vec<Value> = serde_json::from_value(
-                self.get_json(&format!("/repos/{owner}/{name}/branches?per_page=100&page={page}")).await?,
-            )
-            .unwrap_or_default();
+            let path = format!("/repos/{owner}/{name}/branches?per_page=100&page={page}");
+            let batch: Vec<Value> = serde_json::from_value(self.get_json(&path).await?)
+                .map_err(|e| GhError::Api { status: StatusCode::OK, body: format!("respuesta inesperada de {path}: {e}") })?;
             let n = batch.len();
             for b in batch {
                 let bname = b["name"].as_str().unwrap_or_default().to_string();
@@ -27,10 +27,17 @@ impl GithubClient {
             }
         }
 
-        let summaries: Vec<Value> = serde_json::from_value(
-            self.get_json(&format!("/repos/{owner}/{name}/rulesets?per_page=100&includes_parents=false")).await?,
-        )
-        .unwrap_or_default();
+        let mut summaries = Vec::new();
+        for page in 1.. {
+            let path = format!("/repos/{owner}/{name}/rulesets?per_page=100&page={page}&includes_parents=false");
+            let batch: Vec<Value> = serde_json::from_value(self.get_json(&path).await?)
+                .map_err(|e| GhError::Api { status: StatusCode::OK, body: format!("respuesta inesperada de {path}: {e}") })?;
+            let n = batch.len();
+            summaries.extend(batch);
+            if n < 100 {
+                break;
+            }
+        }
         let mut rulesets = Vec::new();
         for s in summaries {
             // Defensive: skip summaries without a numeric id (id 0 would produce an invalid PUT later)
@@ -46,8 +53,13 @@ impl GithubClient {
 
         let mut branch_protections = Vec::new();
         for b in &protected {
-            let get = self.get_json(&format!("/repos/{owner}/{name}/branches/{b}/protection")).await?;
-            branch_protections.push(BranchProtection { branch: b.clone(), config: protection_get_to_put(&get) });
+            let path = format!("/repos/{owner}/{name}/branches/{b}/protection");
+            match self.get_json(&path).await {
+                Ok(get) => branch_protections.push(BranchProtection { branch: b.clone(), config: protection_get_to_put(&get) }),
+                // Rama protegida solo por rulesets: no hay protección clásica que snapshotear.
+                Err(GhError::Api { status, .. }) if status == StatusCode::NOT_FOUND => {}
+                Err(e) => return Err(e),
+            }
         }
 
         let s = |k: &str| repo[k].as_str().map(String::from);
