@@ -1,6 +1,8 @@
 use crate::model::*;
 use serde_json::{json, Value};
 
+/// Añade un cambio si difieren. Convención en TODOS los call sites: `current` = valor del
+/// repo DESTINO (t.*), `desired` = valor del repo REFERENCIA (r.*).
 fn push_scalar(changes: &mut Vec<SettingChange>, category: Category, key: &str, label: &str, current: Value, desired: Value) {
     if current != desired {
         changes.push(SettingChange {
@@ -116,7 +118,6 @@ pub fn diff_snapshots(reference: &RepoSettingsSnapshot, target: &RepoSettingsSna
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::*;
     use serde_json::json;
 
     fn base(repo: &str) -> RepoSettingsSnapshot {
@@ -183,6 +184,17 @@ mod tests {
         let create = d.changes.iter().find(|c| c.key == "ruleset.tag.tag-rules").unwrap();
         assert_eq!(create.category, Category::Tags);
         assert_eq!(create.current, serde_json::Value::Null);
+    }
+
+    #[test]
+    fn target_only_ruleset_produces_no_change() {
+        let reference = base("a/ref");
+        let mut target = base("a/t1");
+        target.rulesets = vec![
+            RulesetSummary { id: 5, name: "target-only".into(), target: "branch".into(), payload: json!({}) },
+        ];
+        let d = diff_snapshots(&reference, &target);
+        assert!(d.changes.is_empty());
     }
 
     #[test]
