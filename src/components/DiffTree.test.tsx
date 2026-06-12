@@ -28,6 +28,8 @@ describe("DiffTree", () => {
     const cb = screen.getByRole("checkbox", { name: /Default branch/ });
     expect(cb).toBeDisabled();
     expect(screen.getByText(/no existe en el destino/)).toBeInTheDocument();
+    // La categoría sin cambios aplicables no debe renderizar checkbox de categoría.
+    expect(screen.queryByRole("checkbox", { name: /Categoría Default branch/ })).not.toBeInTheDocument();
   });
 
   it("desmarcar un setting lo quita de la selección y la categoría refleja tri-estado", () => {
