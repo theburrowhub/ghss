@@ -134,6 +134,9 @@ pub async fn audit(state: State<'_, AppState>, reference: String, targets: Vec<S
             Err(e) => errors.push((repo, e)),
         }
     }
+    // buffer_unordered devuelve en orden de finalización; ordenamos para una UI estable.
+    diffs.sort_by(|a, b| a.repo.cmp(&b.repo));
+    errors.sort_by(|a, b| a.0.cmp(&b.0));
     Ok(AuditResult { reference: ref_snap, diffs, errors })
 }
 
