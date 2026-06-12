@@ -18,6 +18,12 @@ export function AuthView({ onLogin }: { onLogin: (u: UserInfo) => void }) {
     authLoadSaved().then((u) => u && onLogin(u)).catch(() => {});
   }, [onLogin]);
 
+  // Cambiar de método detiene cualquier polling de device flow en curso.
+  const switchMethod = (m: Method) => {
+    polling.current = false;
+    setMethod(m);
+  };
+
   const run = async (fn: () => Promise<UserInfo>) => {
     setBusy(true);
     setError(null);
@@ -60,9 +66,9 @@ export function AuthView({ onLogin }: { onLogin: (u: UserInfo) => void }) {
       <div className="card" style={{ width: 440 }}>
         <h2 style={{ marginTop: 0 }}>Conectar con GitHub</h2>
         <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-          <button onClick={() => setMethod("gh")} className={method === "gh" ? "primary" : ""}>gh CLI</button>
-          <button onClick={() => setMethod("pat")} className={method === "pat" ? "primary" : ""}>Token (PAT)</button>
-          <button onClick={() => setMethod("device")} className={method === "device" ? "primary" : ""}>Device Flow</button>
+          <button onClick={() => switchMethod("gh")} className={method === "gh" ? "primary" : ""}>gh CLI</button>
+          <button onClick={() => switchMethod("pat")} className={method === "pat" ? "primary" : ""}>Token (PAT)</button>
+          <button onClick={() => switchMethod("device")} className={method === "device" ? "primary" : ""}>Device Flow</button>
         </div>
 
         {method === "gh" && (
