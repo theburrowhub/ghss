@@ -110,9 +110,8 @@ pub async fn audit(state: State<'_, AppState>, reference: String, targets: Vec<S
     let (ro, rn) = split_full_name(&reference)?;
     let ref_snap = c.fetch_snapshot(&ro, &rn).await.map_err(|e| e.to_string())?;
 
-    let fetches = targets.iter().map(|t| {
+    let fetches = targets.into_iter().map(|t| {
         let c = c.clone();
-        let t = t.clone();
         async move {
             let (o, n) = match t.split_once('/') {
                 Some((o, n)) => (o.to_string(), n.to_string()),
@@ -121,7 +120,11 @@ pub async fn audit(state: State<'_, AppState>, reference: String, targets: Vec<S
             (t.clone(), c.fetch_snapshot(&o, &n).await.map_err(|e| e.to_string()))
         }
     });
-    let results = futures::future::join_all(fetches).await;
+    // Concurrencia acotada: cientos de fetches simultáneos disparan los
+    // secondary rate limits de GitHub.
+    use futures::StreamExt;
+    let results: Vec<(String, Result<RepoSettingsSnapshot, String>)> =
+        futures::stream::iter(fetches).buffer_unordered(8).collect().await;
 
     let mut diffs = Vec::new();
     let mut errors = Vec::new();
