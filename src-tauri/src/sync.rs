@@ -1,4 +1,6 @@
+use crate::github::GithubClient;
 use crate::model::*;
+use serde::Serialize;
 use serde_json::{Map, Value};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -52,6 +54,40 @@ pub fn plan_actions(changes: &[SettingChange], target: &RepoSettingsSnapshot) ->
         actions.insert(0, SyncAction::PatchRepo(Value::Object(patch)));
     }
     actions
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ActionResult {
+    pub description: String,
+    pub ok: bool,
+    pub error: Option<String>,
+}
+
+/// Aplica acciones secuencialmente. Un fallo no detiene el resto (espíritu del spec:
+/// errores por ítem, sin abortar el batch). `on_progress` se invoca antes de cada acción.
+pub async fn apply_actions(
+    client: &GithubClient,
+    owner: &str,
+    name: &str,
+    actions: &[SyncAction],
+    mut on_progress: impl FnMut(&str),
+) -> Vec<ActionResult> {
+    let mut results = Vec::new();
+    for action in actions {
+        let description = action.describe();
+        on_progress(&description);
+        let outcome = match action {
+            SyncAction::PatchRepo(body) => client.update_repo(owner, name, body).await,
+            SyncAction::CreateRuleset(payload) => client.create_ruleset(owner, name, payload).await,
+            SyncAction::UpdateRuleset { id, payload } => client.update_ruleset(owner, name, *id, payload).await,
+            SyncAction::PutBranchProtection { branch, config } => client.put_branch_protection(owner, name, branch, config).await,
+        };
+        results.push(match outcome {
+            Ok(_) => ActionResult { description, ok: true, error: None },
+            Err(e) => ActionResult { description, ok: false, error: Some(e.to_string()) },
+        });
+    }
+    results
 }
 
 #[cfg(test)]
