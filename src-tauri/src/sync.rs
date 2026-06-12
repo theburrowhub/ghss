@@ -37,7 +37,7 @@ pub fn plan_actions(changes: &[SettingChange], target: &RepoSettingsSnapshot) ->
         } else if c.key.starts_with("ruleset.") {
             // Resolver por payload, no parseando la clave: los nombres de ruleset pueden
             // contener puntos y la clave es solo un identificador de UI.
-            let name = c.desired["name"].as_str().unwrap_or_default();
+            let Some(name) = c.desired["name"].as_str() else { continue; };
             let rs_target = c.desired["target"].as_str().unwrap_or("branch");
             match target.rulesets.iter().find(|x| x.name == name && x.target == rs_target) {
                 Some(existing) => actions.push(SyncAction::UpdateRuleset { id: existing.id, payload: c.desired.clone() }),
@@ -97,7 +97,7 @@ mod tests {
     #[test]
     fn ruleset_upsert_resolves_create_vs_update() {
         let changes = vec![
-            change("ruleset.branch.existing", Category::Rules, json!({"name": "existing", "rules": [{"type": "deletion"}]})),
+            change("ruleset.branch.existing", Category::Rules, json!({"name": "existing", "target": "branch", "rules": [{"type": "deletion"}]})),
             change("ruleset.tag.newtag", Category::Tags, json!({"name": "newtag", "target": "tag"})),
         ];
         let actions = plan_actions(&changes, &target_with_ruleset());
