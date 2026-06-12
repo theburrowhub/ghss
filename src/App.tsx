@@ -39,7 +39,8 @@ export default function App() {
     setBusy(true);
     setError(null);
     try {
-      setAuditResult(await audit(reference, Array.from(targets)));
+      // La referencia nunca se audita contra sí misma aunque siguiera marcada como destino.
+      setAuditResult(await audit(reference, Array.from(targets).filter((t) => t !== reference)));
       setStage("audit");
     } catch (e) {
       setError(String(e));
