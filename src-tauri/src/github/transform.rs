@@ -32,6 +32,7 @@ pub fn protection_get_to_put(get: &Value) -> Value {
     if let Some(rsc) = get.get("required_status_checks").filter(|v| !v.is_null()) {
         put["required_status_checks"] = json!({
             "strict": rsc["strict"].as_bool().unwrap_or(false),
+            "contexts": rsc.get("contexts").cloned().unwrap_or_else(|| json!([])),
             "checks": rsc.get("checks").cloned().unwrap_or_else(|| json!([])),
         });
     }
@@ -43,7 +44,18 @@ pub fn protection_get_to_put(get: &Value) -> Value {
             "require_last_push_approval": rev["require_last_push_approval"].as_bool().unwrap_or(false),
         });
         if let Some(dr) = rev.get("dismissal_restrictions").filter(|v| !v.is_null()) {
-            r["dismissal_restrictions"] = json!({"users": logins(&dr["users"], "login"), "teams": logins(&dr["teams"], "slug")});
+            r["dismissal_restrictions"] = json!({
+                "users": logins(&dr["users"], "login"),
+                "teams": logins(&dr["teams"], "slug"),
+                "apps": logins(&dr["apps"], "slug"),
+            });
+        }
+        if let Some(bpa) = rev.get("bypass_pull_request_allowances").filter(|v| !v.is_null()) {
+            r["bypass_pull_request_allowances"] = json!({
+                "users": logins(&bpa["users"], "login"),
+                "teams": logins(&bpa["teams"], "slug"),
+                "apps":  logins(&bpa["apps"],  "slug"),
+            });
         }
         put["required_pull_request_reviews"] = r;
     }
@@ -92,7 +104,13 @@ mod tests {
                 "require_last_push_approval": true,
                 "dismissal_restrictions": {
                     "users": [{"login": "alice"}],
-                    "teams": [{"slug": "platform"}]
+                    "teams": [{"slug": "platform"}],
+                    "apps": [{"slug": "ci-app"}]
+                },
+                "bypass_pull_request_allowances": {
+                    "users": [{"login": "carol"}],
+                    "teams": [{"slug": "release"}],
+                    "apps": [{"slug": "merge-bot"}]
                 }
             },
             "restrictions": {"users": [{"login": "bob"}], "teams": [{"slug": "core"}], "apps": [{"slug": "ci-app"}]},
@@ -105,9 +123,10 @@ mod tests {
         });
         let put = protection_get_to_put(&get);
         assert_eq!(put["enforce_admins"], json!(true));
-        assert_eq!(put["required_status_checks"], json!({"strict": true, "checks": [{"context": "ci", "app_id": null}]}));
+        assert_eq!(put["required_status_checks"], json!({"strict": true, "contexts": ["ci"], "checks": [{"context": "ci", "app_id": null}]}));
         assert_eq!(put["required_pull_request_reviews"]["required_approving_review_count"], json!(2));
-        assert_eq!(put["required_pull_request_reviews"]["dismissal_restrictions"], json!({"users": ["alice"], "teams": ["platform"]}));
+        assert_eq!(put["required_pull_request_reviews"]["dismissal_restrictions"], json!({"users": ["alice"], "teams": ["platform"], "apps": ["ci-app"]}));
+        assert_eq!(put["required_pull_request_reviews"]["bypass_pull_request_allowances"], json!({"users": ["carol"], "teams": ["release"], "apps": ["merge-bot"]}));
         assert_eq!(put["restrictions"], json!({"users": ["bob"], "teams": ["core"], "apps": ["ci-app"]}));
         assert_eq!(put["required_linear_history"], json!(true));
         assert_eq!(put["lock_branch"], json!(false));
