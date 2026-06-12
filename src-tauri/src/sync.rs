@@ -70,7 +70,7 @@ pub async fn apply_actions(
     owner: &str,
     name: &str,
     actions: &[SyncAction],
-    mut on_progress: impl FnMut(&str),
+    mut on_progress: impl FnMut(&str) + Send,
 ) -> Vec<ActionResult> {
     let mut results = Vec::new();
     for action in actions {
