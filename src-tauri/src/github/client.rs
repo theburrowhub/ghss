@@ -93,6 +93,22 @@ impl GithubClient {
         self.get_json("/user").await
     }
 
+    pub async fn update_repo(&self, owner: &str, name: &str, body: &Value) -> GhResult<Value> {
+        self.send_json(Method::PATCH, &format!("/repos/{owner}/{name}"), body).await
+    }
+
+    pub async fn create_ruleset(&self, owner: &str, name: &str, payload: &Value) -> GhResult<Value> {
+        self.send_json(Method::POST, &format!("/repos/{owner}/{name}/rulesets"), payload).await
+    }
+
+    pub async fn update_ruleset(&self, owner: &str, name: &str, id: u64, payload: &Value) -> GhResult<Value> {
+        self.send_json(Method::PUT, &format!("/repos/{owner}/{name}/rulesets/{id}"), payload).await
+    }
+
+    pub async fn put_branch_protection(&self, owner: &str, name: &str, branch: &str, config: &Value) -> GhResult<Value> {
+        self.send_json(Method::PUT, &format!("/repos/{owner}/{name}/branches/{branch}/protection"), config).await
+    }
+
     pub async fn list_repos(&self) -> GhResult<Vec<RepoInfo>> {
         let mut repos = Vec::new();
         for page in 1.. {
