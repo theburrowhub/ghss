@@ -55,10 +55,19 @@ pub struct DeviceStart {
     pub interval: u64,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum DevicePoll {
     Pending,
     Token(String),
+}
+
+impl std::fmt::Debug for DevicePoll {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DevicePoll::Pending => write!(f, "DevicePoll::Pending"),
+            DevicePoll::Token(_) => write!(f, "DevicePoll::Token([REDACTED])"),
+        }
+    }
 }
 
 pub fn github_oauth_base() -> String {
@@ -74,8 +83,12 @@ pub async fn device_start(base: &str, client_id: &str) -> Result<DeviceStart, Au
         .await?
         .json()
         .await?;
+    let device_code = resp["device_code"].as_str().unwrap_or_default().to_string();
+    if device_code.is_empty() {
+        return Err(AuthError::Device("respuesta inválida de /login/device/code: falta device_code".into()));
+    }
     Ok(DeviceStart {
-        device_code: resp["device_code"].as_str().unwrap_or_default().into(),
+        device_code,
         user_code: resp["user_code"].as_str().unwrap_or_default().into(),
         verification_uri: resp["verification_uri"].as_str().unwrap_or("https://github.com/login/device").into(),
         interval: resp["interval"].as_u64().unwrap_or(5),
