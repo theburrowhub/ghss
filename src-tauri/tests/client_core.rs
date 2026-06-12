@@ -29,9 +29,13 @@ async fn list_repos_paginates_and_maps_admin() {
         }))
         .collect();
     Mock::given(method("GET")).and(path("/user/repos")).and(query_param("page", "1"))
+        .and(header("authorization", "Bearer tok"))
+        .and(header("x-github-api-version", "2022-11-28"))
         .respond_with(ResponseTemplate::new(200).set_body_json(&page1))
         .mount(&server).await;
     Mock::given(method("GET")).and(path("/user/repos")).and(query_param("page", "2"))
+        .and(header("authorization", "Bearer tok"))
+        .and(header("x-github-api-version", "2022-11-28"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!([{
             "full_name": "jamuriano/solo", "name": "solo", "owner": {"login": "jamuriano"},
             "private": false, "default_branch": "master", "description": "d",

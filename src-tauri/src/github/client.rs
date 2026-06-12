@@ -61,6 +61,7 @@ impl GithubClient {
                     .and_then(|v| v.parse::<u64>().ok())
                     .unwrap_or(2)
                     .min(60);
+                let _ = resp.bytes().await; // drena el cuerpo para reutilizar la conexión
                 tokio::time::sleep(Duration::from_secs(wait)).await;
                 continue;
             }
@@ -73,7 +74,7 @@ impl GithubClient {
             }
             return Ok(resp);
         }
-        unreachable!("el bucle de reintentos siempre retorna")
+        Err(GhError::Api { status: StatusCode::TOO_MANY_REQUESTS, body: "rate limit agotado tras reintentos".into() })
     }
 
     pub(crate) async fn get_json(&self, path: &str) -> GhResult<Value> {
@@ -96,7 +97,8 @@ impl GithubClient {
         let mut repos = Vec::new();
         for page in 1.. {
             let path = format!("/user/repos?per_page=100&page={page}&affiliation=owner,collaborator,organization_member&sort=full_name");
-            let batch: Vec<Value> = serde_json::from_value(self.get_json(&path).await?).unwrap_or_default();
+            let batch: Vec<Value> = serde_json::from_value(self.get_json(&path).await?)
+                .map_err(|e| GhError::Api { status: StatusCode::OK, body: format!("respuesta inesperada de /user/repos: {e}") })?;
             let n = batch.len();
             for r in batch {
                 repos.push(RepoInfo {
