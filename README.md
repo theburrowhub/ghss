@@ -34,7 +34,26 @@ Auth → Repos → Auditoría → Pre-sync (diff) → Ejecución
 
 ---
 
-## Requisitos
+## Instalación
+
+### Homebrew (macOS)
+
+```bash
+brew install theburrowhub/tap/ghss
+ghss
+```
+
+Actualizar: `brew upgrade ghss`. La fórmula instala el binario `ghss`, que abre la interfaz al ejecutarlo.
+
+### Descarga directa (.dmg)
+
+Descarga el `.dmg` de la [última release](https://github.com/theburrowhub/ghss/releases/latest), ábrelo y arrastra **ghss** a Aplicaciones.
+
+Documentación completa: **https://theburrowhub.github.io/ghss/**
+
+---
+
+## Requisitos (para compilar)
 
 - **Rust** toolchain stable (instalación recomendada: `rustup`)
 - **Node 20+** con npm
@@ -166,6 +185,37 @@ ghss/
     ├── components/      # DiffTree, RepoList, CategoryBadge...
     └── api.ts           # invoke() typed wrappers
 ```
+
+---
+
+## Publicación (release + Homebrew)
+
+El repo lleva dos workflows de GitHub Actions:
+
+- **`pages.yml`** — despliega el sitio `site/` en GitHub Pages en cada push a `main`. Ya activo en https://theburrowhub.github.io/ghss/
+- **`release.yml`** — al hacer push de un tag `vX.Y.Z`:
+  1. Compila la app con `tauri-action` en macOS (arm64 + x86_64) y publica el `.dmg` en la release.
+  2. Empaqueta el binario como `ghss_<version>_<target-triple>.tar.gz` (convención del tap, estilo cargo-dist como `fang`).
+  3. Genera/actualiza `Formula/ghss.rb` en `theburrowhub/homebrew-tap`.
+
+### Configuración previa (una sola vez)
+
+El paso 3 necesita un secret en el repo `ghss`:
+
+- **`HOMEBREW_TAP_TOKEN`**: un PAT con permiso de escritura sobre `theburrowhub/homebrew-tap`.
+
+```bash
+gh secret set HOMEBREW_TAP_TOKEN --repo theburrowhub/ghss
+```
+
+### Cortar una versión
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+> Nota: el `.dmg` no está firmado/notarizado (requiere credenciales de Apple Developer). En macOS, la primera apertura pide confirmación en Ajustes → Privacidad y seguridad. La instalación vía Homebrew (binario) no tiene esa fricción.
 
 ---
 
