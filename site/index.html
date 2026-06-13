@@ -88,19 +88,42 @@
 
       <section id="install">
         <h2>Installation</h2>
-        <h3>Homebrew (macOS)</h3>
-        <pre><code>brew install theburrowhub/tap/ghss
+
+        <div class="tabs" role="tablist">
+          <button class="tab active" role="tab" data-tab="macos">macOS</button>
+          <button class="tab" role="tab" data-tab="linux">Linux</button>
+        </div>
+
+        <div class="tab-panel active" data-panel="macos">
+          <h3>Homebrew</h3>
+          <pre><code>brew install theburrowhub/tap/ghss
 ghss</code></pre>
-        <p class="muted">To upgrade: <code>brew upgrade ghss</code></p>
+          <p class="muted">To upgrade: <code>brew upgrade ghss</code></p>
 
-        <h3>Direct download (.dmg)</h3>
-        <p>
-          For the packaged app, download the <code>.dmg</code> from the
-          <a href="https://github.com/theburrowhub/ghss/releases/latest">latest release</a>,
-          open it, and drag <strong>ghss</strong> to Applications.
-        </p>
+          <h3>Direct download (.dmg)</h3>
+          <p>
+            For the packaged app, download the <code>.dmg</code> from the
+            <a href="https://github.com/theburrowhub/ghss/releases/latest">latest release</a>
+            (Apple Silicon &amp; Intel), open it, and drag <strong>ghss</strong> to Applications.
+          </p>
+        </div>
 
-        <h3>From source</h3>
+        <div class="tab-panel" data-panel="linux">
+          <h3>Download (.deb / .AppImage)</h3>
+          <p>
+            Grab the <code>.deb</code> (Debian/Ubuntu) or the portable <code>.AppImage</code> from the
+            <a href="https://github.com/theburrowhub/ghss/releases/latest">latest release</a>.
+          </p>
+          <pre><code># Debian / Ubuntu
+sudo dpkg -i ghss_*_amd64.deb
+
+# AppImage (any distro)
+chmod +x ghss_*.AppImage
+./ghss_*.AppImage</code></pre>
+          <p class="muted">Requires a WebKitGTK runtime (<code>webkit2gtk-4.1</code>), present on most modern desktops.</p>
+        </div>
+
+        <h3>From source (any OS)</h3>
         <pre><code>git clone https://github.com/theburrowhub/ghss
 cd ghss
 npm install
@@ -146,5 +169,19 @@ npm run tauri build</code></pre>
         <p class="muted">theburrowhub · built with Tauri 2, Rust, and React</p>
       </div>
     </footer>
+
+    <script>
+      // Detecta el SO para preseleccionar el tab; permite cambiarlo manualmente.
+      (function () {
+        const tabs = document.querySelectorAll(".tab");
+        const panels = document.querySelectorAll(".tab-panel");
+        function select(name) {
+          tabs.forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
+          panels.forEach((p) => p.classList.toggle("active", p.dataset.panel === name));
+        }
+        tabs.forEach((t) => t.addEventListener("click", () => select(t.dataset.tab)));
+        if (/Linux/i.test(navigator.platform || navigator.userAgent)) select("linux");
+      })();
+    </script>
   </body>
 </html>

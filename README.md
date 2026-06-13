@@ -36,7 +36,9 @@ Auth → Repos → Auditoría → Pre-sync (diff) → Ejecución
 
 ## Instalación
 
-### Homebrew (macOS)
+### macOS
+
+**Homebrew:**
 
 ```bash
 brew install theburrowhub/tap/ghss
@@ -45,9 +47,22 @@ ghss
 
 Actualizar: `brew upgrade ghss`. La fórmula instala el binario `ghss`, que abre la interfaz al ejecutarlo.
 
-### Descarga directa (.dmg)
+**O descarga directa:** el `.dmg` de la [última release](https://github.com/theburrowhub/ghss/releases/latest) (Apple Silicon e Intel), ábrelo y arrastra **ghss** a Aplicaciones.
 
-Descarga el `.dmg` de la [última release](https://github.com/theburrowhub/ghss/releases/latest), ábrelo y arrastra **ghss** a Aplicaciones.
+### Linux
+
+Descarga de la [última release](https://github.com/theburrowhub/ghss/releases/latest) el `.deb` (Debian/Ubuntu) o el `.AppImage` portable:
+
+```bash
+# Debian / Ubuntu
+sudo dpkg -i ghss_*_amd64.deb
+
+# AppImage (cualquier distro)
+chmod +x ghss_*.AppImage
+./ghss_*.AppImage
+```
+
+Requiere el runtime WebKitGTK (`webkit2gtk-4.1`), presente en la mayoría de escritorios modernos.
 
 Documentación completa: **https://theburrowhub.github.io/ghss/**
 
