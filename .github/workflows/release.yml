@@ -5,6 +5,11 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+# Si se re-empuja el mismo tag, cancela el run anterior en vez de solaparse.
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: true
+
 jobs:
   build:
     permissions:
@@ -104,17 +109,22 @@ jobs:
           prerelease: false
 
   # Actualiza Formula/ghss.rb en theburrowhub/homebrew-tap tras publicar la release.
-  # Requiere el secret HOMEBREW_TAP_TOKEN (PAT con permiso de escritura en el tap).
+  # Usa el secret TAP_GITHUB_TOKEN (convención de la org: fang, go-secret…).
   homebrew:
     needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Generate and push formula
+        continue-on-error: true
         env:
-          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          TAP_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
           GH_REF: ${{ github.ref_name }}
         run: |
           set -euo pipefail
+          if [ -z "${TAP_TOKEN}" ]; then
+            echo "TAP_GITHUB_TOKEN no configurado — se omite la actualización del tap."
+            exit 0
+          fi
           VERSION="${GH_REF#v}"
           BASE="https://github.com/theburrowhub/ghss/releases/download/${GH_REF}"
           ARM_URL="${BASE}/ghss_${VERSION}_aarch64-apple-darwin.tar.gz"

@@ -217,10 +217,10 @@ El repo lleva dos workflows de GitHub Actions:
 
 El paso 3 necesita un secret en el repo `ghss`:
 
-- **`HOMEBREW_TAP_TOKEN`**: un PAT con permiso de escritura sobre `theburrowhub/homebrew-tap`.
+- **`TAP_GITHUB_TOKEN`**: un PAT con permiso de escritura sobre `theburrowhub/homebrew-tap` (mismo nombre de secret que usan `fang`, `go-secret`… en la org).
 
 ```bash
-gh secret set HOMEBREW_TAP_TOKEN --repo theburrowhub/ghss
+gh secret set TAP_GITHUB_TOKEN --repo theburrowhub/ghss
 ```
 
 ### Cortar una versión
