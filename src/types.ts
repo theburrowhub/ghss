@@ -1,6 +1,6 @@
 export type Category = "default_branch" | "features" | "pull_requests" | "others" | "tags" | "rules";
 
-export interface UserInfo { login: string; avatar_url: string; }
+export interface UserInfo { login: string; avatar_url: string; scope_warning: string | null; }
 
 export interface RepoInfo {
   full_name: string;

@@ -16,16 +16,29 @@ pub struct AppState {
 pub struct UserInfo {
     pub login: String,
     pub avatar_url: String,
+    /// Aviso si al token le faltan scopes recomendados (None = sin problemas / no comprobable).
+    pub scope_warning: Option<String>,
 }
 
 type CmdResult<T> = Result<T, String>;
 
 async fn login_with_token(state: &State<'_, AppState>, token: String) -> CmdResult<UserInfo> {
     let client = GithubClient::new(GithubClient::api_base(), token);
-    let user = client.get_user().await.map_err(|e| e.to_string())?;
+    let (user, scopes) = client.auth_check().await.map_err(|e| e.to_string())?;
+    // Solo avisamos si la cabecera trae scopes (tokens clásicos/OAuth/gh) y falta «repo».
+    // Los fine-grained PATs no envían scopes: no podemos comprobarlos, así que no avisamos.
+    let scope_warning = if !scopes.is_empty() && !scopes.iter().any(|s| s == "repo") {
+        Some(format!(
+            "El token no incluye el scope «repo» (tiene: {}). La sincronización de settings fallará en repos privados.",
+            scopes.join(", ")
+        ))
+    } else {
+        None
+    };
     let info = UserInfo {
         login: user["login"].as_str().unwrap_or_default().into(),
         avatar_url: user["avatar_url"].as_str().unwrap_or_default().into(),
+        scope_warning,
     };
     *state.client.write().await = Some(client);
     Ok(info)

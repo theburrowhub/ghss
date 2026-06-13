@@ -21,12 +21,25 @@ export default function App() {
   const [syncResults, setSyncResults] = useState<RepoSyncResult[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState<{ title: string; detail?: string }>({ title: "" });
+
+  // Clasifica el error: un 401 (token inválido/caducado) corta la sesión y vuelve a login.
+  const handleError = useCallback((e: unknown) => {
+    const s = String(e);
+    if (/\b401\b/.test(s) || s.includes("sesión no válida") || s.includes("no autenticado")) {
+      setUser(null);
+      setStatus("");
+      setStage("auth");
+    }
+    setError(s);
+  }, []);
 
   const onLogin = useCallback(async (u: UserInfo) => {
     setUser(u);
     setError(null);
+    setWarning(u.scope_warning ?? null);
     setLoading({ title: "Cargando repositorios…", detail: `Conectado como ${u.login}. Obteniendo la lista de repos accesibles.` });
     setStage("loading");
     try {
@@ -34,10 +47,10 @@ export default function App() {
       setRepos(list);
       setStage("repos");
     } catch (e) {
-      setError(String(e));
+      handleError(e);
       setStage("auth");
     }
-  }, []);
+  }, [handleError]);
 
   const runAudit = async () => {
     if (!reference) return;
@@ -63,8 +76,8 @@ export default function App() {
       const final = await audit(reference, targetList);
       setAuditResult({ ...final, streaming: false, total: targetList.length });
     } catch (e) {
-      setError(String(e));
-      setStage("repos");
+      handleError(e);
+      if (!/\b401\b/.test(String(e))) setStage("repos");
     } finally {
       unStarted();
       unRepo();
@@ -79,8 +92,8 @@ export default function App() {
     try {
       setSyncResults(await applySync(plans));
     } catch (e) {
-      setError(String(e));
-      setStage("audit");
+      handleError(e);
+      if (!/\b401\b/.test(String(e))) setStage("audit");
     } finally {
       setBusy(false);
     }
@@ -90,6 +103,7 @@ export default function App() {
     await logout().catch(() => {});
     setUser(null);
     setStatus("");
+    setWarning(null);
     setStage("auth");
   };
 
@@ -139,7 +153,13 @@ export default function App() {
         />
       )}
 
-      <StatusBar error={error} status={status} onDismiss={() => setError(null)} />
+      <StatusBar
+        error={error}
+        warning={warning}
+        status={status}
+        onDismiss={() => setError(null)}
+        onDismissWarning={() => setWarning(null)}
+      />
     </>
   );
 }

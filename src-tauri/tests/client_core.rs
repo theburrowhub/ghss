@@ -65,3 +65,36 @@ async fn retries_on_rate_limit() {
     let client = GithubClient::new(server.uri(), "tok".into());
     assert_eq!(client.get_user().await.unwrap()["login"], "ok");
 }
+
+#[tokio::test]
+async fn auth_check_parses_oauth_scopes() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/user"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("x-oauth-scopes", "repo, read:org, gist")
+                .set_body_json(json!({"login": "jamuriano"})),
+        )
+        .mount(&server)
+        .await;
+
+    let client = GithubClient::new(server.uri(), "tok".into());
+    let (user, scopes) = client.auth_check().await.unwrap();
+    assert_eq!(user["login"], "jamuriano");
+    assert_eq!(scopes, vec!["repo".to_string(), "read:org".to_string(), "gist".to_string()]);
+}
+
+#[tokio::test]
+async fn auth_check_no_scopes_header_is_empty() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/user"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"login": "fine-grained"})))
+        .mount(&server)
+        .await;
+
+    let client = GithubClient::new(server.uri(), "tok".into());
+    let (_user, scopes) = client.auth_check().await.unwrap();
+    assert!(scopes.is_empty());
+}

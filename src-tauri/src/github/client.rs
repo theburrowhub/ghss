@@ -9,7 +9,7 @@ pub enum GhError {
     Network(#[from] reqwest::Error),
     #[error("GitHub respondió {status}: {body}")]
     Api { status: StatusCode, body: String },
-    #[error("no autenticado")]
+    #[error("401 sesión no válida: el token es incorrecto o caducó")]
     Unauthorized,
 }
 
@@ -50,10 +50,10 @@ impl GithubClient {
             }
             let resp = req.send().await?;
             let status = resp.status();
-            let rate_limited = status == StatusCode::TOO_MANY_REQUESTS
-                || (status == StatusCode::FORBIDDEN
-                    && resp.headers().get("x-ratelimit-remaining").map(|v| v == "0").unwrap_or(false));
-            if rate_limited && attempt < 2 {
+            // Solo reintentamos en 429 (límite secundario / abuso), que sí honra retry-after.
+            // El 403 por límite primario agotado (x-ratelimit-remaining: 0) no se recupera en
+            // segundos —se restablece a la hora—, así que fallamos rápido con mensaje claro.
+            if status == StatusCode::TOO_MANY_REQUESTS && attempt < 2 {
                 let wait = resp
                     .headers()
                     .get("retry-after")
@@ -91,6 +91,20 @@ impl GithubClient {
 
     pub async fn get_user(&self) -> GhResult<Value> {
         self.get_json("/user").await
+    }
+
+    /// Valida el token y devuelve (usuario, scopes). Los scopes salen de la cabecera
+    /// `X-OAuth-Scopes` (presente en tokens clásicos/OAuth/gh; vacía en fine-grained PATs).
+    pub async fn auth_check(&self) -> GhResult<(Value, Vec<String>)> {
+        let resp = self.send(Method::GET, "/user", None).await?;
+        let scopes = resp
+            .headers()
+            .get("x-oauth-scopes")
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.split(',').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect())
+            .unwrap_or_default();
+        let user: Value = resp.json().await?;
+        Ok((user, scopes))
     }
 
     pub async fn update_repo(&self, owner: &str, name: &str, body: &Value) -> GhResult<Value> {
