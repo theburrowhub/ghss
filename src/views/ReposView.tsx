@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
-import type { RepoInfo } from "../types";
+import { useEffect, useMemo, useState } from "react";
+import { listOrgTeams, listTeamRepos } from "../api";
+import type { RepoInfo, TeamInfo } from "../types";
 
 interface Props {
   repos: RepoInfo[];
@@ -8,16 +9,58 @@ interface Props {
   onReference: (repo: string | null) => void;
   onTargets: (next: Set<string>) => void;
   onAudit: () => void;
+  onStatus: (s: string) => void;
   busy: boolean;
 }
 
-export function ReposView({ repos, reference, targets, onReference, onTargets, onAudit, busy }: Props) {
+export function ReposView({ repos, reference, targets, onReference, onTargets, onAudit, onStatus, busy }: Props) {
   const [q, setQ] = useState("");
   const [owner, setOwner] = useState("(todos)");
   const owners = useMemo(() => ["(todos)", ...Array.from(new Set(repos.map((r) => r.owner))).sort()], [repos]);
 
+  const [teams, setTeams] = useState<TeamInfo[]>([]);
+  const [teamSlug, setTeamSlug] = useState("(todos)");
+  const [teamRepos, setTeamRepos] = useState<Set<string> | null>(null); // null = sin filtro de equipo
+  const [teamBusy, setTeamBusy] = useState(false);
+
+  // Al cambiar de owner: reseteamos el equipo y cargamos los equipos de esa organización.
+  useEffect(() => {
+    setTeamSlug("(todos)");
+    setTeamRepos(null);
+    if (owner === "(todos)") {
+      setTeams([]);
+      return;
+    }
+    let cancelled = false;
+    listOrgTeams(owner)
+      .then((t) => { if (!cancelled) setTeams(t); })
+      .catch(() => { if (!cancelled) setTeams([]); });
+    return () => { cancelled = true; };
+  }, [owner]);
+
+  // Al elegir un equipo: cargamos sus repos para filtrar la lista.
+  useEffect(() => {
+    if (owner === "(todos)" || teamSlug === "(todos)") {
+      setTeamRepos(null);
+      return;
+    }
+    let cancelled = false;
+    setTeamBusy(true);
+    listTeamRepos(owner, teamSlug)
+      .then((r) => { if (!cancelled) setTeamRepos(new Set(r)); })
+      .catch(() => { if (!cancelled) setTeamRepos(new Set()); })
+      .finally(() => { if (!cancelled) setTeamBusy(false); });
+    return () => { cancelled = true; };
+  }, [owner, teamSlug]);
+
+  useEffect(() => {
+    onStatus(`${targets.size} repos destino seleccionados · referencia: ${reference ?? "ninguna"}`);
+  }, [targets, reference, onStatus]);
+
   const matchesFilter = (r: RepoInfo) =>
-    (owner === "(todos)" || r.owner === owner) && r.full_name.toLowerCase().includes(q.toLowerCase());
+    (owner === "(todos)" || r.owner === owner) &&
+    (teamRepos === null || teamRepos.has(r.full_name)) &&
+    r.full_name.toLowerCase().includes(q.toLowerCase());
 
   const refRepo = repos.find((r) => r.full_name === reference) ?? null;
   // La referencia sale de la lista común: se muestra fija arriba como "destacado".
@@ -55,6 +98,13 @@ export function ReposView({ repos, reference, targets, onReference, onTargets, o
         <select value={owner} onChange={(e) => setOwner(e.target.value)}>
           {owners.map((o) => <option key={o}>{o}</option>)}
         </select>
+        {owner !== "(todos)" && teams.length > 0 && (
+          <select value={teamSlug} onChange={(e) => setTeamSlug(e.target.value)} title="Filtrar por equipo de la organización">
+            <option value="(todos)">Todos los equipos</option>
+            {teams.map((t) => <option key={t.slug} value={t.slug}>{t.name}</option>)}
+          </select>
+        )}
+        {teamBusy && <span className="spinner spinner-sm" />}
         <div className="spacer" style={{ flex: 1 }} />
         <span className="muted">{targets.size} destinos</span>
         <button className="primary" disabled={!reference || targets.size === 0 || busy} onClick={onAudit}>
