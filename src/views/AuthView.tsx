@@ -18,7 +18,7 @@ export function AuthView({ onLogin }: { onLogin: (u: UserInfo) => void }) {
     authLoadSaved().then((u) => u && onLogin(u)).catch(() => {});
   }, [onLogin]);
 
-  // Cambiar de método detiene cualquier polling de device flow en curso.
+  // Switching method stops any in-progress device flow polling.
   const switchMethod = (m: Method) => {
     polling.current = false;
     setMethod(m);
@@ -64,7 +64,7 @@ export function AuthView({ onLogin }: { onLogin: (u: UserInfo) => void }) {
   return (
     <div className="view" style={{ display: "grid", placeItems: "center" }}>
       <div className="card" style={{ width: 440 }}>
-        <h2 style={{ marginTop: 0 }}>Conectar con GitHub</h2>
+        <h2 style={{ marginTop: 0 }}>Connect to GitHub</h2>
         <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
           <button onClick={() => switchMethod("gh")} className={method === "gh" ? "primary" : ""}>gh CLI</button>
           <button onClick={() => switchMethod("pat")} className={method === "pat" ? "primary" : ""}>Token (PAT)</button>
@@ -73,32 +73,32 @@ export function AuthView({ onLogin }: { onLogin: (u: UserInfo) => void }) {
 
         {method === "gh" && (
           <>
-            <p className="muted">Usa la sesión existente del CLI de GitHub (<span className="mono">gh auth token</span>).</p>
-            <button className="primary" disabled={busy} onClick={() => run(authWithGh)}>Conectar con gh</button>
+            <p className="muted">Use your existing GitHub CLI session (<span className="mono">gh auth token</span>).</p>
+            <button className="primary" disabled={busy} onClick={() => run(authWithGh)}>Connect with gh</button>
           </>
         )}
 
         {method === "pat" && (
           <>
-            <p className="muted">Pega un Personal Access Token con permisos de administración de repos.</p>
+            <p className="muted">Paste a Personal Access Token with repo admin permissions.</p>
             <input type="password" placeholder="ghp_… / github_pat_…" value={pat} onChange={(e) => setPat(e.target.value)} />
             <label style={{ display: "block", margin: "10px 0" }}>
-              <input type="checkbox" checked={savePat} onChange={(e) => setSavePat(e.target.checked)} /> Guardar en el keychain del sistema
+              <input type="checkbox" checked={savePat} onChange={(e) => setSavePat(e.target.checked)} /> Save to the system keychain
             </label>
-            <button className="primary" disabled={busy || !pat} onClick={() => run(() => authWithPat(pat, savePat))}>Conectar</button>
+            <button className="primary" disabled={busy || !pat} onClick={() => run(() => authWithPat(pat, savePat))}>Connect</button>
           </>
         )}
 
         {method === "device" && (
           <>
-            <p className="muted">Requiere el Client ID de una OAuth App propia (Settings → Developer settings).</p>
+            <p className="muted">Requires the Client ID of your own OAuth App (Settings → Developer settings).</p>
             <input type="text" placeholder="Client ID" value={clientId} onChange={(e) => setClientId(e.target.value)} />
             <div style={{ marginTop: 10 }}>
-              <button className="primary" disabled={busy || !clientId} onClick={startDevice}>Iniciar device flow</button>
+              <button className="primary" disabled={busy || !clientId} onClick={startDevice}>Start device flow</button>
             </div>
             {device && (
               <p>
-                Introduce el código <strong className="mono">{device.user_code}</strong> en{" "}
+                Enter code <strong className="mono">{device.user_code}</strong> at{" "}
                 <a href={device.verification_uri} target="_blank" rel="noreferrer">{device.verification_uri}</a>
               </p>
             )}

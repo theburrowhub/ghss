@@ -4,7 +4,7 @@ import type { RepoSyncResult } from "../types";
 import { friendlyError } from "./StatusBar";
 
 interface Props {
-  results: RepoSyncResult[] | null; // null = en curso
+  results: RepoSyncResult[] | null; // null = in progress
   onDone: () => void;
 }
 
@@ -18,7 +18,7 @@ export function ExecutionView({ results, onDone }: Props) {
     return () => { un.then((f) => f()); };
   }, []);
 
-  // Estado de cada repo: ok (todo aplicado), parcial (algún fallo), fallido (no se pudo nada).
+  // Status per repo: ok (all applied), partial (some failures), failed (nothing applied).
   const repoStatus = (r: RepoSyncResult): "ok" | "partial" | "failed" => {
     if (r.fatal) return "failed";
     const failed = r.results.filter((a) => !a.ok).length;
@@ -31,22 +31,22 @@ export function ExecutionView({ results, onDone }: Props) {
 
   return (
     <div className="view">
-      <h3>{results ? "Resultado de la sincronización" : "Sincronizando…"}</h3>
+      <h3>{results ? "Sync results" : "Syncing…"}</h3>
 
       {!results && (
         <div className="card">
           {progress.map((p, i) => (
             <div key={i}><span className="mono">{p.repo}</span> — {p.action}</div>
           ))}
-          {progress.length === 0 && <p className="muted">Preparando…</p>}
+          {progress.length === 0 && <p className="muted">Preparing…</p>}
         </div>
       )}
 
       {results && (
         <div className="card" style={{ marginBottom: 12, display: "flex", gap: 16, alignItems: "center" }}>
-          <span><strong>{okRepos}</strong> de {results.length} repos sin incidencias</span>
-          {failedActions > 0 && <span className="badge err">{failedActions} acciones fallidas</span>}
-          <span className="muted">Los fallos de un repo no afectan al resto.</span>
+          <span><strong>{okRepos}</strong> of {results.length} repos with no issues</span>
+          {failedActions > 0 && <span className="badge err">{failedActions} failed actions</span>}
+          <span className="muted">Failures on one repo don't affect the others.</span>
         </div>
       )}
 
@@ -56,9 +56,9 @@ export function ExecutionView({ results, onDone }: Props) {
           <div className="card" key={r.repo} style={{ marginBottom: 8 }}>
             <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: r.results.length || r.fatal ? 8 : 0 }}>
               <span className="mono">{r.repo}</span>
-              {st === "ok" && <span className="badge ok">✓ aplicado</span>}
-              {st === "partial" && <span className="badge diff">parcial</span>}
-              {st === "failed" && <span className="badge err">fallido</span>}
+              {st === "ok" && <span className="badge ok">✓ applied</span>}
+              {st === "partial" && <span className="badge diff">partial</span>}
+              {st === "failed" && <span className="badge err">failed</span>}
             </div>
             {r.fatal && <p className="muted" style={{ color: "var(--danger)", margin: 0 }}>{friendlyError(r.fatal)}</p>}
             {r.results.map((a, i) => (
@@ -72,7 +72,7 @@ export function ExecutionView({ results, onDone }: Props) {
         );
       })}
 
-      {results && <button className="primary" onClick={onDone} style={{ marginTop: 8 }}>Volver a repos</button>}
+      {results && <button className="primary" onClick={onDone} style={{ marginTop: 8 }}>Back to repos</button>}
     </div>
   );
 }

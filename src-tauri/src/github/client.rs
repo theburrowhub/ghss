@@ -5,11 +5,11 @@ use std::time::Duration;
 
 #[derive(Debug, thiserror::Error)]
 pub enum GhError {
-    #[error("error de red: {0}")]
+    #[error("network error: {0}")]
     Network(#[from] reqwest::Error),
-    #[error("GitHub respondió {status}: {body}")]
+    #[error("GitHub responded {status}: {body}")]
     Api { status: StatusCode, body: String },
-    #[error("401 sesión no válida: el token es incorrecto o caducó")]
+    #[error("401 invalid session: the token is incorrect or has expired")]
     Unauthorized,
 }
 
@@ -50,9 +50,9 @@ impl GithubClient {
             }
             let resp = req.send().await?;
             let status = resp.status();
-            // Solo reintentamos en 429 (límite secundario / abuso), que sí honra retry-after.
-            // El 403 por límite primario agotado (x-ratelimit-remaining: 0) no se recupera en
-            // segundos —se restablece a la hora—, así que fallamos rápido con mensaje claro.
+            // We only retry on 429 (secondary rate limit / abuse), which does honor retry-after.
+            // A 403 from an exhausted primary rate limit (x-ratelimit-remaining: 0) does not
+            // recover in seconds — it resets on the hour — so we fail fast with a clear message.
             if status == StatusCode::TOO_MANY_REQUESTS && attempt < 2 {
                 let wait = resp
                     .headers()
@@ -61,7 +61,7 @@ impl GithubClient {
                     .and_then(|v| v.parse::<u64>().ok())
                     .unwrap_or(2)
                     .min(60);
-                let _ = resp.bytes().await; // drena el cuerpo para reutilizar la conexión
+                let _ = resp.bytes().await; // drain the body to reuse the connection
                 tokio::time::sleep(Duration::from_secs(wait)).await;
                 continue;
             }
@@ -74,7 +74,7 @@ impl GithubClient {
             }
             return Ok(resp);
         }
-        Err(GhError::Api { status: StatusCode::TOO_MANY_REQUESTS, body: "rate limit agotado tras reintentos".into() })
+        Err(GhError::Api { status: StatusCode::TOO_MANY_REQUESTS, body: "rate limit exhausted after retries".into() })
     }
 
     pub(crate) async fn get_json(&self, path: &str) -> GhResult<Value> {
@@ -93,8 +93,8 @@ impl GithubClient {
         self.get_json("/user").await
     }
 
-    /// Valida el token y devuelve (usuario, scopes). Los scopes salen de la cabecera
-    /// `X-OAuth-Scopes` (presente en tokens clásicos/OAuth/gh; vacía en fine-grained PATs).
+    /// Validates the token and returns (user, scopes). Scopes come from the
+    /// `X-OAuth-Scopes` header (present in classic/OAuth/gh tokens; empty in fine-grained PATs).
     pub async fn auth_check(&self) -> GhResult<(Value, Vec<String>)> {
         let resp = self.send(Method::GET, "/user", None).await?;
         let scopes = resp
@@ -128,7 +128,7 @@ impl GithubClient {
         for page in 1.. {
             let path = format!("/orgs/{org}/teams?per_page=100&page={page}");
             let batch: Vec<Value> = serde_json::from_value(self.get_json(&path).await?)
-                .map_err(|e| GhError::Api { status: StatusCode::OK, body: format!("respuesta inesperada de /orgs/{org}/teams: {e}") })?;
+                .map_err(|e| GhError::Api { status: StatusCode::OK, body: format!("unexpected response from /orgs/{org}/teams: {e}") })?;
             let n = batch.len();
             for t in batch {
                 teams.push(crate::model::TeamInfo {
@@ -148,7 +148,7 @@ impl GithubClient {
         for page in 1.. {
             let path = format!("/orgs/{org}/teams/{team_slug}/repos?per_page=100&page={page}");
             let batch: Vec<Value> = serde_json::from_value(self.get_json(&path).await?)
-                .map_err(|e| GhError::Api { status: StatusCode::OK, body: format!("respuesta inesperada de team repos: {e}") })?;
+                .map_err(|e| GhError::Api { status: StatusCode::OK, body: format!("unexpected response from team repos: {e}") })?;
             let n = batch.len();
             for r in batch {
                 if let Some(full) = r["full_name"].as_str() {
@@ -167,7 +167,7 @@ impl GithubClient {
         for page in 1.. {
             let path = format!("/user/repos?per_page=100&page={page}&affiliation=owner,collaborator,organization_member&sort=full_name");
             let batch: Vec<Value> = serde_json::from_value(self.get_json(&path).await?)
-                .map_err(|e| GhError::Api { status: StatusCode::OK, body: format!("respuesta inesperada de /user/repos: {e}") })?;
+                .map_err(|e| GhError::Api { status: StatusCode::OK, body: format!("unexpected response from /user/repos: {e}") })?;
             let n = batch.len();
             for r in batch {
                 repos.push(RepoInfo {

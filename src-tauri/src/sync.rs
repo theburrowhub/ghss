@@ -16,17 +16,17 @@ impl SyncAction {
         match self {
             SyncAction::PatchRepo(body) => {
                 let fields: Vec<&str> = body.as_object().map(|o| o.keys().map(String::as_str).collect()).unwrap_or_default();
-                format!("Actualizar settings del repo ({})", fields.join(", "))
+                format!("Update repo settings ({})", fields.join(", "))
             }
-            SyncAction::CreateRuleset(p) => format!("Crear ruleset «{}»", p["name"].as_str().unwrap_or("?")),
-            SyncAction::UpdateRuleset { payload, .. } => format!("Actualizar ruleset «{}»", payload["name"].as_str().unwrap_or("?")),
-            SyncAction::PutBranchProtection { branch, .. } => format!("Aplicar branch protection a «{}»", branch),
+            SyncAction::CreateRuleset(p) => format!("Create ruleset «{}»", p["name"].as_str().unwrap_or("?")),
+            SyncAction::UpdateRuleset { payload, .. } => format!("Update ruleset «{}»", payload["name"].as_str().unwrap_or("?")),
+            SyncAction::PutBranchProtection { branch, .. } => format!("Apply branch protection to «{}»", branch),
         }
     }
 }
 
-/// Convierte los cambios seleccionados en acciones de API contra el repo destino.
-/// Los cambios no aplicables se ignoran (la UI ya los muestra deshabilitados).
+/// Converts the selected changes into API actions against the target repo.
+/// Non-applicable changes are ignored (the UI already shows them disabled).
 pub fn plan_actions(changes: &[SettingChange], target: &RepoSettingsSnapshot) -> Vec<SyncAction> {
     let mut patch = Map::new();
     let mut actions = Vec::new();
@@ -37,8 +37,8 @@ pub fn plan_actions(changes: &[SettingChange], target: &RepoSettingsSnapshot) ->
         } else if let Some(field) = c.key.strip_prefix("features.").or_else(|| c.key.strip_prefix("pull_requests.")).or_else(|| c.key.strip_prefix("others.")) {
             patch.insert(field.into(), c.desired.clone());
         } else if c.key.starts_with("ruleset.") {
-            // Resolver por payload, no parseando la clave: los nombres de ruleset pueden
-            // contener puntos y la clave es solo un identificador de UI.
+            // Resolve via payload, not by parsing the key: ruleset names can contain
+            // dots and the key is just a UI identifier.
             let Some(name) = c.desired["name"].as_str() else { continue; };
             let rs_target = c.desired["target"].as_str().unwrap_or("branch");
             match target.rulesets.iter().find(|x| x.name == name && x.target == rs_target) {
@@ -63,8 +63,8 @@ pub struct ActionResult {
     pub error: Option<String>,
 }
 
-/// Aplica acciones secuencialmente. Un fallo no detiene el resto (espíritu del spec:
-/// errores por ítem, sin abortar el batch). `on_progress` se invoca antes de cada acción.
+/// Applies actions sequentially. A failure does not stop the rest (spec intent:
+/// per-item errors, no batch abort). `on_progress` is called before each action.
 pub async fn apply_actions(
     client: &GithubClient,
     owner: &str,
@@ -126,7 +126,7 @@ mod tests {
             SyncAction::PatchRepo(body) => {
                 assert_eq!(*body, json!({"has_wiki": true, "allow_squash_merge": true, "default_branch": "develop", "web_commit_signoff_required": true}));
             }
-            other => panic!("esperaba PatchRepo, fue {:?}", other),
+            other => panic!("expected PatchRepo, got {:?}", other),
         }
     }
 
@@ -155,7 +155,7 @@ mod tests {
                 assert_eq!(branch, "main");
                 assert_eq!(*config, json!({"enforce_admins": true}));
             }
-            other => panic!("esperaba PutBranchProtection, fue {:?}", other),
+            other => panic!("expected PutBranchProtection, got {:?}", other),
         }
     }
 

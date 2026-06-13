@@ -10,7 +10,7 @@ interface Props {
   onAudit: () => void;
   onStatus: (s: string) => void;
   busy: boolean;
-  // Filtros controlados desde App (persisten al ir y volver de la auditoría).
+  // Filters controlled from App (persist when navigating to/from audit).
   search: string;
   onSearch: (s: string) => void;
   owner: string;
@@ -31,22 +31,22 @@ export function ReposView(props: Props) {
     showArchived, onShowArchived,
   } = props;
 
-  const owners = useMemo(() => ["(todos)", ...Array.from(new Set(repos.map((r) => r.owner))).sort()], [repos]);
+  const owners = useMemo(() => ["(all)", ...Array.from(new Set(repos.map((r) => r.owner))).sort()], [repos]);
 
   useEffect(() => {
-    onStatus(`${targets.size} repos destino seleccionados · referencia: ${reference ?? "ninguna"}`);
+    onStatus(`${targets.size} target repos selected · reference: ${reference ?? "none"}`);
   }, [targets, reference, onStatus]);
 
   const matchesFilter = (r: RepoInfo) =>
-    (owner === "(todos)" || r.owner === owner) &&
+    (owner === "(all)" || r.owner === owner) &&
     (teamRepos === null || teamRepos.has(r.full_name)) &&
     (showArchived || !r.archived) &&
     r.full_name.toLowerCase().includes(search.toLowerCase());
 
   const refRepo = repos.find((r) => r.full_name === reference) ?? null;
-  // La referencia sale de la lista común: se muestra fija arriba como "destacado".
+  // The reference is removed from the common list: shown pinned at the top as "featured".
   const visible = repos.filter((r) => r.full_name !== reference && matchesFilter(r));
-  // Los repos archivados son read-only: no pueden ser destino de sincronización.
+  // Archived repos are read-only: they can't be sync targets.
   const selectableVisible = visible.filter((r) => r.admin && !r.archived);
   const selectedVisible = selectableVisible.filter((r) => targets.has(r.full_name)).length;
   const allSelected = selectableVisible.length > 0 && selectedVisible === selectableVisible.length;
@@ -81,24 +81,24 @@ export function ReposView(props: Props) {
   return (
     <div className="view">
       <div style={{ display: "flex", gap: 10, marginBottom: 14, alignItems: "center" }}>
-        <input type="text" placeholder="Buscar repos…" value={search} onChange={(e) => onSearch(e.target.value)} style={{ maxWidth: 320 }} />
+        <input type="text" placeholder="Search repos…" value={search} onChange={(e) => onSearch(e.target.value)} style={{ maxWidth: 320 }} />
         <select value={owner} onChange={(e) => onOwner(e.target.value)}>
           {owners.map((o) => <option key={o}>{o}</option>)}
         </select>
-        {owner !== "(todos)" && teams.length > 0 && (
-          <select value={teamSlug} onChange={(e) => onTeamSlug(e.target.value)} title="Filtrar por equipo de la organización">
-            <option value="(todos)">Todos los equipos</option>
+        {owner !== "(all)" && teams.length > 0 && (
+          <select value={teamSlug} onChange={(e) => onTeamSlug(e.target.value)} title="Filter by organization team">
+            <option value="(all)">All teams</option>
             {teams.map((t) => <option key={t.slug} value={t.slug}>{t.name}</option>)}
           </select>
         )}
         {teamBusy && <span className="spinner spinner-sm" />}
         <label className="muted" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-          <input type="checkbox" checked={showArchived} onChange={(e) => onShowArchived(e.target.checked)} /> archivados
+          <input type="checkbox" checked={showArchived} onChange={(e) => onShowArchived(e.target.checked)} /> archived
         </label>
         <div className="spacer" style={{ flex: 1 }} />
-        <span className="muted">{targets.size} destinos</span>
+        <span className="muted">{targets.size} targets</span>
         <button className="primary" disabled={!reference || targets.size === 0 || busy} onClick={onAudit}>
-          {busy ? "Auditando…" : "Auditar diferencias"}
+          {busy ? "Auditing…" : "Audit differences"}
         </button>
       </div>
 
@@ -106,25 +106,25 @@ export function ReposView(props: Props) {
         <div className="card ref-panel">
           <span className="ref-icon">★</span>
           <div style={{ flex: 1 }}>
-            <div className="ref-label">Referencia · origen de la configuración</div>
+            <div className="ref-label">Reference · configuration source</div>
             <span className="mono">{refRepo.full_name}</span>
             {refRepo.private && <span className="badge" style={{ marginLeft: 8 }}>private</span>}
           </div>
-          <button onClick={() => onReference(null)}>Quitar referencia</button>
+          <button onClick={() => onReference(null)}>Remove reference</button>
         </div>
       ) : (
         <div className="card muted" style={{ marginBottom: 14 }}>
-          Marca un repositorio como <strong>referencia</strong> con el botón «Usar como referencia» de su fila. Será el origen del que se copia la configuración.
+          Mark a repository as <strong>reference</strong> using the "Use as reference" button on its row. It will be the source from which configuration is copied.
         </div>
       )}
 
       <div className="list-toolbar">
         <button onClick={selectAll} disabled={selectableVisible.length === 0 || allSelected}>
-          Seleccionar todo ({selectableVisible.length})
+          Select all ({selectableVisible.length})
         </button>
-        <button onClick={deselectAll} disabled={selectedVisible === 0}>Deseleccionar todo</button>
+        <button onClick={deselectAll} disabled={selectedVisible === 0}>Deselect all</button>
         <span className="muted">
-          {selectedVisible} de {selectableVisible.length} seleccionables en el filtro actual
+          {selectedVisible} of {selectableVisible.length} selectable in current filter
         </span>
       </div>
 
@@ -134,9 +134,9 @@ export function ReposView(props: Props) {
             <input
               type="checkbox"
               title={
-                r.archived ? "Repo archivado (read-only): no puede ser destino, solo referencia"
-                : r.admin ? "Seleccionar como destino"
-                : "Necesitas permiso admin para sincronizar este repo"
+                r.archived ? "Archived repo (read-only): can't be a target, only a reference"
+                : r.admin ? "Select as target"
+                : "You need admin permission to sync this repo"
               }
               disabled={!r.admin || r.archived}
               checked={targets.has(r.full_name)}
@@ -144,17 +144,17 @@ export function ReposView(props: Props) {
             />
             <span className="mono">{r.full_name}</span>
             {r.private && <span className="badge">private</span>}
-            {r.archived && <span className="badge muted">archivado</span>}
-            {!r.admin && <span className="badge muted">sin admin</span>}
+            {r.archived && <span className="badge muted">archived</span>}
+            {!r.admin && <span className="badge muted">no admin</span>}
             <span className="muted" style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {r.description}
             </span>
-            <button className="ref-btn" title="Usar como referencia (origen de la configuración)" onClick={() => markReference(r.full_name)}>
-              Usar como referencia
+            <button className="ref-btn" title="Use as reference (configuration source)" onClick={() => markReference(r.full_name)}>
+              Use as reference
             </button>
           </div>
         ))}
-        {visible.length === 0 && <p className="muted" style={{ padding: 16 }}>Sin resultados.</p>}
+        {visible.length === 0 && <p className="muted" style={{ padding: 16 }}>No results.</p>}
       </div>
     </div>
   );

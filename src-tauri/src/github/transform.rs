@@ -1,6 +1,6 @@
 use serde_json::{json, Value};
 
-/// Elimina campos de servidor de un ruleset para poder compararlo y reenviarlo en POST/PUT.
+/// Strips server-side fields from a ruleset so it can be compared and re-sent in POST/PUT.
 pub fn normalize_ruleset(mut v: Value) -> Value {
     if let Some(obj) = v.as_object_mut() {
         for k in ["id", "node_id", "source", "source_type", "created_at", "updated_at", "_links", "current_user_can_bypass"] {
@@ -14,7 +14,7 @@ fn logins(v: &Value, field: &str) -> Value {
     json!(v.as_array().map(|a| a.iter().filter_map(|x| x[field].as_str().map(String::from)).collect::<Vec<_>>()).unwrap_or_default())
 }
 
-/// Convierte la respuesta de GET branch protection al cuerpo que exige el PUT.
+/// Converts the GET branch protection response to the body required by PUT.
 pub fn protection_get_to_put(get: &Value) -> Value {
     let b = |path: &str| get.pointer(path).and_then(Value::as_bool).unwrap_or(false);
     let mut put = json!({

@@ -25,20 +25,20 @@ export default function App() {
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState<{ title: string; detail?: string }>({ title: "" });
 
-  // Estado de filtros de la vista de repos: vive aquí para persistir al ir y volver de la auditoría.
+  // Repo view filter state: lives here so it persists when navigating to/from audit.
   const [search, setSearch] = useState("");
-  const [ownerFilter, setOwnerFilter] = useState("(todos)");
-  const [teamSlug, setTeamSlug] = useState("(todos)");
+  const [ownerFilter, setOwnerFilter] = useState("(all)");
+  const [teamSlug, setTeamSlug] = useState("(all)");
   const [teams, setTeams] = useState<TeamInfo[]>([]);
-  const [teamRepos, setTeamRepos] = useState<Set<string> | null>(null); // null = sin filtro de equipo
+  const [teamRepos, setTeamRepos] = useState<Set<string> | null>(null); // null = no team filter
   const [teamBusy, setTeamBusy] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
 
-  // Al cambiar de owner: reseteamos el equipo y cargamos los equipos de esa organización.
+  // When owner changes: reset team and load teams for that organization.
   useEffect(() => {
-    setTeamSlug("(todos)");
+    setTeamSlug("(all)");
     setTeamRepos(null);
-    if (ownerFilter === "(todos)") {
+    if (ownerFilter === "(all)") {
       setTeams([]);
       return;
     }
@@ -49,9 +49,9 @@ export default function App() {
     return () => { cancelled = true; };
   }, [ownerFilter]);
 
-  // Al elegir un equipo: cargamos sus repos para filtrar la lista.
+  // When a team is chosen: load its repos to filter the list.
   useEffect(() => {
-    if (ownerFilter === "(todos)" || teamSlug === "(todos)") {
+    if (ownerFilter === "(all)" || teamSlug === "(all)") {
       setTeamRepos(null);
       return;
     }
@@ -64,10 +64,10 @@ export default function App() {
     return () => { cancelled = true; };
   }, [ownerFilter, teamSlug]);
 
-  // Clasifica el error: un 401 (token inválido/caducado) corta la sesión y vuelve a login.
+  // Classify the error: a 401 (invalid/expired token) ends the session and returns to login.
   const handleError = useCallback((e: unknown) => {
     const s = String(e);
-    if (/\b401\b/.test(s) || s.includes("sesión no válida") || s.includes("no autenticado")) {
+    if (/\b401\b/.test(s) || s.includes("invalid session") || s.includes("unauthenticated")) {
       setUser(null);
       setStatus("");
       setStage("auth");
@@ -79,7 +79,7 @@ export default function App() {
     setUser(u);
     setError(null);
     setWarning(u.scope_warning ?? null);
-    setLoading({ title: "Cargando repositorios…", detail: `Conectado como ${u.login}. Obteniendo la lista de repos accesibles.` });
+    setLoading({ title: "Loading repositories…", detail: `Connected as ${u.login}. Fetching the list of accessible repos.` });
     setStage("loading");
     try {
       const list = await listRepos();
@@ -156,7 +156,7 @@ export default function App() {
           <>
             <img className="avatar" src={user.avatar_url} alt="" />
             <span>{user.login}</span>
-            <button onClick={doLogout}>Salir</button>
+            <button onClick={doLogout}>Sign out</button>
           </>
         )}
       </div>

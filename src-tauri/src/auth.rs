@@ -5,19 +5,19 @@ const KEYRING_USER: &str = "github_pat";
 
 #[derive(Debug, thiserror::Error)]
 pub enum AuthError {
-    #[error("gh CLI no disponible o sin sesión: {0}")]
+    #[error("GitHub CLI not available or not signed in: {0}")]
     GhCli(String),
     #[error("keychain: {0}")]
     Keyring(#[from] keyring::Error),
-    #[error("red: {0}")]
+    #[error("network: {0}")]
     Network(#[from] reqwest::Error),
     #[error("device flow: {0}")]
     Device(String),
 }
 
-/// Lee el PATH real del shell de login del usuario. Las apps GUI de macOS lanzadas desde
-/// Finder/.app no heredan ese PATH, así que `gh` (en Homebrew, MacPorts, mise/asdf shims…)
-/// no se encuentra. Ejecutar el shell con `-lc` obtiene el PATH con toda la configuración.
+/// Reads the real PATH from the user's login shell. macOS GUI apps launched from
+/// Finder/.app do not inherit that PATH, so `gh` (in Homebrew, MacPorts, mise/asdf shims…)
+/// is not found. Running the shell with `-lc` gets the PATH with the full configuration.
 async fn login_shell_path() -> Option<String> {
     let shell = std::env::var("SHELL").ok()?;
     let fut = tokio::process::Command::new(&shell)
@@ -31,7 +31,7 @@ async fn login_shell_path() -> Option<String> {
     (!p.is_empty()).then_some(p)
 }
 
-/// Combina el PATH base con ubicaciones habituales de binarios, sin duplicados.
+/// Merges the base PATH with common binary locations, deduplicating entries.
 fn merge_paths(base: &str) -> String {
     let common = ["/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin", "/usr/bin", "/bin"];
     let mut seen = std::collections::HashSet::new();
@@ -44,8 +44,8 @@ fn merge_paths(base: &str) -> String {
     parts.join(":")
 }
 
-/// Obtiene el token de la sesión del CLI `gh` (gh auth token), localizando `gh` con un
-/// PATH robusto (shell de login + rutas habituales).
+/// Retrieves the token from the `gh` CLI session (gh auth token), locating `gh` using a
+/// robust PATH (login shell + common locations).
 pub async fn gh_cli_token() -> Result<String, AuthError> {
     let base = login_shell_path().await.unwrap_or_else(|| std::env::var("PATH").unwrap_or_default());
     let out = tokio::process::Command::new("gh")
@@ -55,7 +55,7 @@ pub async fn gh_cli_token() -> Result<String, AuthError> {
         .await
         .map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
-                AuthError::GhCli("no se encontró el binario «gh» en el PATH. Instala GitHub CLI (https://cli.github.com) o usa un token (PAT).".into())
+                AuthError::GhCli("could not find the «gh» binary in PATH. Install GitHub CLI (https://cli.github.com) or use a token (PAT).".into())
             } else {
                 AuthError::GhCli(e.to_string())
             }
@@ -63,7 +63,7 @@ pub async fn gh_cli_token() -> Result<String, AuthError> {
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
         let msg = if stderr.is_empty() {
-            "gh no tiene una sesión activa. Ejecuta «gh auth login» en una terminal.".to_string()
+            "gh has no active session. Run «gh auth login» in a terminal.".to_string()
         } else {
             stderr
         };
@@ -71,7 +71,7 @@ pub async fn gh_cli_token() -> Result<String, AuthError> {
     }
     let token = String::from_utf8_lossy(&out.stdout).trim().to_string();
     if token.is_empty() {
-        return Err(AuthError::GhCli("gh devolvió un token vacío. Ejecuta «gh auth login».".into()));
+        return Err(AuthError::GhCli("gh returned an empty token. Run «gh auth login».".into()));
     }
     Ok(token)
 }
@@ -129,7 +129,7 @@ pub async fn device_start(base: &str, client_id: &str) -> Result<DeviceStart, Au
         .await?;
     let device_code = resp["device_code"].as_str().unwrap_or_default().to_string();
     if device_code.is_empty() {
-        return Err(AuthError::Device("respuesta inválida de /login/device/code: falta device_code".into()));
+        return Err(AuthError::Device("invalid response from /login/device/code: missing device_code".into()));
     }
     Ok(DeviceStart {
         device_code,
@@ -158,6 +158,6 @@ pub async fn device_poll_once(base: &str, client_id: &str, device_code: &str) ->
     match resp["error"].as_str() {
         Some("authorization_pending") | Some("slow_down") => Ok(DevicePoll::Pending),
         Some(e) => Err(AuthError::Device(e.into())),
-        None => Err(AuthError::Device("respuesta inesperada".into())),
+        None => Err(AuthError::Device("unexpected response".into())),
     }
 }

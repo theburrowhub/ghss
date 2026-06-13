@@ -24,8 +24,8 @@ export function AuditView({ reference, result, onBack, onSync, onStatus, busy }:
   const diverged = result.diffs.filter((d) => d.changes.length > 0);
   const visible = onlyDiverged ? diverged : result.diffs;
 
-  // Por defecto, cada cambio aplicable entra seleccionado; los toggles del usuario se respetan
-  // (known guarda lo ya visto para no re-seleccionar lo que el usuario desmarcó al llegar repos nuevos).
+  // By default, every applicable change starts selected; user toggles are preserved
+  // (known tracks what has been seen so new repos don't re-select items the user unchecked).
   useEffect(() => {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -59,24 +59,24 @@ export function AuditView({ reference, result, onBack, onSync, onStatus, busy }:
   const totalChanges = plans.reduce((n, p) => n + p.changes.length, 0);
 
   useEffect(() => {
-    if (streaming) onStatus(`Auditando… ${processed} de ${total} repos`);
-    else onStatus(`${selectedCount} de ${allKeys.length} cambios marcados · ${plans.length} repos a sincronizar`);
+    if (streaming) onStatus(`Auditing… ${processed} of ${total} repos`);
+    else onStatus(`${selectedCount} of ${allKeys.length} changes selected · ${plans.length} repos to sync`);
   }, [streaming, processed, total, selectedCount, allKeys.length, plans.length, onStatus]);
 
   return (
     <div className="view">
       <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14 }}>
-        <button onClick={onBack}>← Repos</button>
-        <h3 style={{ margin: 0 }}>Auditoría contra <span className="mono">{reference}</span></h3>
+        <button onClick={onBack}>← Back to repos</button>
+        <h3 style={{ margin: 0 }}>Audit against <span className="mono">{reference}</span></h3>
         <div style={{ flex: 1 }} />
         {streaming && (
           <span className="muted" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <span className="spinner spinner-sm" /> Auditando… {processed} de {total}
+            <span className="spinner spinner-sm" /> Auditing… {processed} of {total}
           </span>
         )}
-        <label><input type="checkbox" checked={onlyDiverged} onChange={(e) => setOnlyDiverged(e.target.checked)} /> solo desincronizados</label>
+        <label><input type="checkbox" checked={onlyDiverged} onChange={(e) => setOnlyDiverged(e.target.checked)} /> only out-of-sync</label>
         <button className="primary" disabled={streaming || totalChanges === 0 || busy} onClick={() => onSync(plans)}>
-          {streaming ? "Esperando…" : `Sincronizar ${totalChanges} cambios en ${plans.length} repos`}
+          {streaming ? "Waiting…" : `Sync ${totalChanges} changes in ${plans.length} repos`}
         </button>
       </div>
 
@@ -87,14 +87,14 @@ export function AuditView({ reference, result, onBack, onSync, onStatus, busy }:
       )}
 
       <div className="list-toolbar">
-        <button onClick={selectAll} disabled={allKeys.length === 0}>Marcar todo</button>
-        <button onClick={deselectAll} disabled={selectedCount === 0}>Desmarcar todo</button>
-        <span className="muted">{selectedCount} de {allKeys.length} cambios seleccionados · {diverged.length} repos divergentes</span>
+        <button onClick={selectAll} disabled={allKeys.length === 0}>Select all</button>
+        <button onClick={deselectAll} disabled={selectedCount === 0}>Deselect all</button>
+        <span className="muted">{selectedCount} of {allKeys.length} changes selected · {diverged.length} divergent repos</span>
       </div>
 
       {result.errors.map(([repo, err]) => (
         <div className="card" key={repo} style={{ marginBottom: 8, borderColor: "var(--danger)" }}>
-          <span className="mono">{repo}</span> <span className="badge err">no auditado</span> <span className="muted">{friendlyError(err)}</span>
+          <span className="mono">{repo}</span> <span className="badge err">not audited</span> <span className="muted">{friendlyError(err)}</span>
         </div>
       ))}
 
@@ -111,10 +111,10 @@ export function AuditView({ reference, result, onBack, onSync, onStatus, busy }:
               <span>{isOpen ? "▼" : "▶"}</span>
               <span className="mono">{d.repo}</span>
               {d.changes.length === 0
-                ? <span className="badge ok">✓ en sync</span>
-                : <span className="badge diff">✗ {d.changes.length} diferencias</span>}
+                ? <span className="badge ok">✓ in sync</span>
+                : <span className="badge diff">✗ {d.changes.length} differences</span>}
               {d.changes.length > 0 && (
-                <span className="muted" style={{ marginLeft: "auto" }}>{repoSelected}/{repoApplicable} marcados</span>
+                <span className="muted" style={{ marginLeft: "auto" }}>{repoSelected}/{repoApplicable} selected</span>
               )}
             </div>
             {isOpen && d.changes.length > 0 && (

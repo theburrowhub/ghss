@@ -16,7 +16,7 @@ pub struct AppState {
 pub struct UserInfo {
     pub login: String,
     pub avatar_url: String,
-    /// Aviso si al token le faltan scopes recomendados (None = sin problemas / no comprobable).
+    /// Warning if the token is missing recommended scopes (None = no issues / not checkable).
     pub scope_warning: Option<String>,
 }
 
@@ -25,11 +25,11 @@ type CmdResult<T> = Result<T, String>;
 async fn login_with_token(state: &State<'_, AppState>, token: String) -> CmdResult<UserInfo> {
     let client = GithubClient::new(GithubClient::api_base(), token);
     let (user, scopes) = client.auth_check().await.map_err(|e| e.to_string())?;
-    // Solo avisamos si la cabecera trae scopes (tokens clásicos/OAuth/gh) y falta «repo».
-    // Los fine-grained PATs no envían scopes: no podemos comprobarlos, así que no avisamos.
+    // We only warn if the header carries scopes (classic/OAuth/gh tokens) and «repo» is missing.
+    // Fine-grained PATs do not send scopes: we cannot check them, so we do not warn.
     let scope_warning = if !scopes.is_empty() && !scopes.iter().any(|s| s == "repo") {
         Some(format!(
-            "El token no incluye el scope «repo» (tiene: {}). La sincronización de settings fallará en repos privados.",
+            "The token is missing the «repo» scope (it has: {}). Syncing settings will fail on private repos.",
             scopes.join(", ")
         ))
     } else {
@@ -96,7 +96,7 @@ pub async fn logout(state: State<'_, AppState>) -> CmdResult<()> {
 }
 
 async fn client(state: &State<'_, AppState>) -> CmdResult<GithubClient> {
-    state.client.read().await.clone().ok_or_else(|| "no autenticado".to_string())
+    state.client.read().await.clone().ok_or_else(|| "not authenticated".to_string())
 }
 
 #[tauri::command]
@@ -108,7 +108,7 @@ pub async fn list_repos(state: State<'_, AppState>) -> CmdResult<Vec<RepoInfo>> 
 pub async fn list_org_teams(state: State<'_, AppState>, org: String) -> CmdResult<Vec<TeamInfo>> {
     match client(&state).await?.list_org_teams(&org).await {
         Ok(teams) => Ok(teams),
-        // Cuentas personales (o sin acceso a equipos) devuelven 404: sin equipos, no es error.
+        // Personal accounts (or those without team access) return 404: no teams, not an error.
         Err(GhError::Api { status, .. }) if status == reqwest::StatusCode::NOT_FOUND => Ok(vec![]),
         Err(e) => Err(e.to_string()),
     }
@@ -122,7 +122,7 @@ pub async fn list_team_repos(state: State<'_, AppState>, org: String, team_slug:
 fn split_full_name(full: &str) -> CmdResult<(String, String)> {
     full.split_once('/')
         .map(|(o, n)| (o.to_string(), n.to_string()))
-        .ok_or_else(|| format!("nombre de repo inválido: {full}"))
+        .ok_or_else(|| format!("invalid repo name: {full}"))
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -157,14 +157,14 @@ pub async fn audit(app: AppHandle, state: State<'_, AppState>, reference: String
         async move {
             let (o, n) = match t.split_once('/') {
                 Some((o, n)) => (o.to_string(), n.to_string()),
-                None => return (t.clone(), Err("nombre inválido".to_string())),
+                None => return (t.clone(), Err("invalid name".to_string())),
             };
             (t.clone(), c.fetch_snapshot(&o, &n).await.map_err(|e| e.to_string()))
         }
     });
-    // Concurrencia acotada: cientos de fetches simultáneos disparan los
-    // secondary rate limits de GitHub. Emitimos cada repo en cuanto termina
-    // (streaming) para que la UI vaya rellenando resultados sin congelarse.
+    // Bounded concurrency: hundreds of simultaneous fetches trigger GitHub's
+    // secondary rate limits. We emit each repo as soon as it finishes
+    // (streaming) so the UI fills in results incrementally without freezing.
     use futures::StreamExt;
     let mut stream = futures::stream::iter(fetches).buffer_unordered(8);
 
@@ -183,8 +183,8 @@ pub async fn audit(app: AppHandle, state: State<'_, AppState>, reference: String
             }
         }
     }
-    // buffer_unordered devuelve en orden de finalización; ordenamos el resultado
-    // final autoritativo para una UI estable (el streaming es solo incremental).
+    // buffer_unordered returns in completion order; we sort the final authoritative
+    // result for a stable UI (the streaming output is incremental only).
     diffs.sort_by(|a, b| a.repo.cmp(&b.repo));
     errors.sort_by(|a, b| a.0.cmp(&b.0));
     Ok(AuditResult { reference: ref_snap, diffs, errors })
@@ -221,7 +221,7 @@ pub async fn apply_sync(app: AppHandle, state: State<'_, AppState>, plans: Vec<R
                 continue;
             }
         };
-        // Snapshot fresco del destino para resolver create-vs-update de rulesets con ids actuales.
+        // Fresh snapshot of the target to resolve create-vs-update for rulesets with current ids.
         let target = match c.fetch_snapshot(&o, &n).await {
             Ok(s) => s,
             Err(e) => {

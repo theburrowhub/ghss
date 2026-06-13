@@ -9,28 +9,28 @@ interface Props {
   onSelectedChange: (next: Set<string>) => void;
 }
 
-/** Pinta un valor escalar con palabra + color según su significado (no según la columna). */
+/** Renders a scalar value with a word + color based on its meaning (not its column). */
 function ScalarValue({ v }: { v: unknown }) {
   if (typeof v === "boolean") {
-    return <span className={`state ${v ? "on" : "off"}`}>{v ? "Activado" : "Desactivado"}</span>;
+    return <span className={`state ${v ? "on" : "off"}`}>{v ? "Enabled" : "Disabled"}</span>;
   }
-  if (v === null || v === undefined) return <span className="state none">no definido</span>;
-  if (typeof v === "string") return <span className="state str">{v === "" ? "(vacío)" : v}</span>;
-  return <span className="state obj">objeto</span>;
+  if (v === null || v === undefined) return <span className="state none">not set</span>;
+  if (typeof v === "string") return <span className="state str">{v === "" ? "(empty)" : v}</span>;
+  return <span className="state obj">object</span>;
 }
 
 const isScalar = (v: unknown) => typeof v !== "object" || v === null;
 
-/** Etiqueta de acción explícita: deja claro qué le pasará al repo destino. */
+/** Explicit action label: makes clear what will happen to the target repo. */
 function actionFor(c: SettingChange): { text: string; cls: string } {
   if (typeof c.desired === "boolean") {
     return c.desired
-      ? { text: "Se activará", cls: "enable" }
-      : { text: "Se desactivará", cls: "disable" };
+      ? { text: "Will be enabled", cls: "enable" }
+      : { text: "Will be disabled", cls: "disable" };
   }
-  if (c.current === null || c.current === undefined) return { text: "Se creará", cls: "create" };
-  if (typeof c.desired === "object") return { text: "Se actualizará", cls: "update" };
-  return { text: "Se cambiará", cls: "change" };
+  if (c.current === null || c.current === undefined) return { text: "Will be created", cls: "create" };
+  if (typeof c.desired === "object") return { text: "Will be updated", cls: "update" };
+  return { text: "Will be changed", cls: "change" };
 }
 
 export function DiffTree({ changes, selectable, selected, onSelectedChange }: Props) {
@@ -75,7 +75,7 @@ export function DiffTree({ changes, selectable, selected, onSelectedChange }: Pr
               {selectable && applicables.length > 0 && (
                 <input
                   type="checkbox"
-                  aria-label={`Categoría ${CATEGORY_LABELS[cat]}`}
+                  aria-label={`Category ${CATEGORY_LABELS[cat]}`}
                   checked={onCount === applicables.length}
                   ref={(el) => {
                     if (el) el.indeterminate = onCount > 0 && onCount < applicables.length;
@@ -86,7 +86,7 @@ export function DiffTree({ changes, selectable, selected, onSelectedChange }: Pr
               )}
               <strong>{CATEGORY_LABELS[cat]}</strong>
               <span className="muted">
-                ({items.length} {items.length === 1 ? "cambio" : "cambios"})
+                ({items.length} {items.length === 1 ? "change" : "changes"})
               </span>
             </div>
             {!isCollapsed &&
@@ -119,7 +119,7 @@ export function DiffTree({ changes, selectable, selected, onSelectedChange }: Pr
           </div>
         );
       })}
-      {byCat.length === 0 && <p className="muted">Sin diferencias — el repo está en sync con la referencia. ✓</p>}
+      {byCat.length === 0 && <p className="muted">No differences — the repo is in sync with the reference. ✓</p>}
     </div>
   );
 }

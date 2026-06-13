@@ -6,16 +6,17 @@ interface Props {
   onDismissWarning: () => void;
 }
 
-/** Traduce los errores crudos del backend a algo legible y accionable. */
+/** Translates raw backend errors into readable, actionable messages. */
 export function friendlyError(raw: string): string {
-  // Patrones que no dependen del JSON.
-  if (/\b401\b/.test(raw) || raw.includes("sesión no válida")) {
-    return "Tu sesión de GitHub no es válida o caducó. Vuelve a conectar.";
+  // Patterns that don't depend on JSON.
+  if (/\b401\b/.test(raw) || raw.includes("invalid session")) {
+    return "Your GitHub session is invalid or expired. Please reconnect.";
   }
   if (raw.toLowerCase().includes("rate limit")) {
-    return "Has alcanzado el límite de peticiones de GitHub. Espera unos minutos antes de reintentar.";
+    return "You've hit GitHub's rate limit. Wait a few minutes and try again.";
   }
-  if (raw.includes("no se encontró el binario «gh»")) return raw;
+  // Pass through gh binary not-found errors as-is (already English from backend).
+  if (raw.includes("gh") && raw.includes("not found")) return raw;
 
   const brace = raw.indexOf("{");
   if (brace >= 0) {
@@ -24,17 +25,17 @@ export function friendlyError(raw: string): string {
       if (obj && typeof obj.message === "string") {
         const msg: string = obj.message;
         if (msg.toLowerCase().includes("rate limit")) {
-          return "Has alcanzado el límite de peticiones de GitHub. Espera unos minutos antes de reintentar.";
+          return "You've hit GitHub's rate limit. Wait a few minutes and try again.";
         }
         if (msg.includes("Upgrade to GitHub Pro")) {
-          return "Esta función (rulesets/protección) requiere repo público o plan de pago. Se ignora en esos repos.";
+          return "This feature (rulesets/protection) requires a public repo or a paid plan. It's skipped on those repos.";
         }
-        const status = raw.match(/respondió\s+(\d{3})/)?.[1] ?? obj.status;
-        if (status === "403" || status === 403) return `Sin permisos (403): ${msg}`;
+        const status = raw.match(/\b(\d{3})\b/)?.[1] ?? obj.status;
+        if (status === "403" || status === 403) return `No permissions (403): ${msg}`;
         return status ? `GitHub ${status}: ${msg}` : msg;
       }
     } catch {
-      /* no era JSON: devolvemos el texto tal cual */
+      /* not JSON: return text as-is */
     }
   }
   return raw;
@@ -47,7 +48,7 @@ export function StatusBar({ error, warning, status, onDismiss, onDismissWarning 
         <span aria-hidden>⚠</span>
         <span className="status-text">{friendlyError(error)}</span>
         <div style={{ flex: 1 }} />
-        <button className="status-dismiss" onClick={onDismiss}>Descartar</button>
+        <button className="status-dismiss" onClick={onDismiss}>Dismiss</button>
       </div>
     );
   }
@@ -57,13 +58,13 @@ export function StatusBar({ error, warning, status, onDismiss, onDismissWarning 
         <span aria-hidden>⚠</span>
         <span className="status-text">{warning}</span>
         <div style={{ flex: 1 }} />
-        <button className="status-dismiss" onClick={onDismissWarning}>Descartar</button>
+        <button className="status-dismiss" onClick={onDismissWarning}>Dismiss</button>
       </div>
     );
   }
   return (
     <div className="statusbar">
-      <span className="status-text muted">{status || "Listo"}</span>
+      <span className="status-text muted">{status || "Ready"}</span>
     </div>
   );
 }

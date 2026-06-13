@@ -1,8 +1,8 @@
 use crate::model::*;
 use serde_json::{json, Value};
 
-/// Añade un cambio si difieren. Convención en TODOS los call sites: `current` = valor del
-/// repo DESTINO (t.*), `desired` = valor del repo REFERENCIA (r.*).
+/// Pushes a change if the values differ. Convention at ALL call sites: `current` = value from
+/// the TARGET repo (t.*), `desired` = value from the REFERENCE repo (r.*).
 fn push_scalar(changes: &mut Vec<SettingChange>, category: Category, key: &str, label: &str, current: Value, desired: Value) {
     if current != desired {
         changes.push(SettingChange {
@@ -29,7 +29,7 @@ pub fn diff_snapshots(reference: &RepoSettingsSnapshot, target: &RepoSettingsSna
             current: json!(target.default_branch),
             desired: json!(reference.default_branch),
             applicable: exists,
-            note: (!exists).then(|| format!("La rama «{}» no existe en el destino", reference.default_branch)),
+            note: (!exists).then(|| format!("Branch «{}» does not exist in the target", reference.default_branch)),
         });
     }
 
@@ -60,7 +60,7 @@ pub fn diff_snapshots(reference: &RepoSettingsSnapshot, target: &RepoSettingsSna
         match target.rulesets.iter().find(|x| x.name == rs.name && x.target == rs.target) {
             None => ch.push(SettingChange {
                 key,
-                label: format!("Ruleset «{}» (crear)", rs.name),
+                label: format!("Ruleset «{}» (create)", rs.name),
                 category,
                 current: Value::Null,
                 desired: rs.payload.clone(),
@@ -69,7 +69,7 @@ pub fn diff_snapshots(reference: &RepoSettingsSnapshot, target: &RepoSettingsSna
             }),
             Some(existing) if existing.payload != rs.payload => ch.push(SettingChange {
                 key,
-                label: format!("Ruleset «{}» (actualizar)", rs.name),
+                label: format!("Ruleset «{}» (update)", rs.name),
                 category,
                 current: existing.payload.clone(),
                 desired: rs.payload.clone(),
@@ -97,7 +97,7 @@ pub fn diff_snapshots(reference: &RepoSettingsSnapshot, target: &RepoSettingsSna
                 current,
                 desired: bp.config.clone(),
                 applicable: false,
-                note: Some(format!("La rama «{}» no existe en el destino", bp.branch)),
+                note: Some(format!("Branch «{}» does not exist in the target", bp.branch)),
             });
         } else if current != bp.config {
             ch.push(SettingChange {
@@ -159,7 +159,7 @@ mod tests {
         let mut reference = base("a/ref");
         reference.default_branch = "develop".into();
         reference.branches = vec!["main".into(), "develop".into()];
-        let target = base("a/t1"); // solo tiene main
+        let target = base("a/t1"); // only has main
         let d = diff_snapshots(&reference, &target);
         let c = d.changes.iter().find(|c| c.key == "default_branch").unwrap();
         assert!(!c.applicable);
@@ -205,7 +205,7 @@ mod tests {
             BranchProtection { branch: "main".into(), config: json!({"enforce_admins": true}) },
             BranchProtection { branch: "release".into(), config: json!({"enforce_admins": false}) },
         ];
-        let target = base("a/t1"); // main sin protección, release no existe
+        let target = base("a/t1"); // main without protection, release does not exist
         let d = diff_snapshots(&reference, &target);
         let main = d.changes.iter().find(|c| c.key == "branch_protection.main").unwrap();
         assert!(main.applicable);
