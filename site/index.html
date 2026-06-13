@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ghss — GitHub Settings Sync</title>
+    <meta name="description" content="App de escritorio (macOS/Linux) para auditar y sincronizar la configuración de repositorios de GitHub desde un repo de referencia a varios destinos." />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <div class="wrap">
+        <div class="logo">★ ghss</div>
+        <h1>GitHub Settings Sync</h1>
+        <p class="tagline">
+          Marca un repositorio como <strong>referencia</strong> y propaga su configuración a tantos repos como quieras.
+          Audita las diferencias primero, elige qué se sincroniza y aplícalo — sin tocar cada repo a mano.
+        </p>
+        <div class="cta">
+          <a class="btn primary" href="#install">Instalar</a>
+          <a class="btn" href="https://github.com/theburrowhub/ghss">Código en GitHub</a>
+        </div>
+        <p class="platforms">macOS (Apple Silicon &amp; Intel) · Linux · construida con Tauri 2 + Rust</p>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <section>
+        <h2>Qué hace</h2>
+        <p>
+          Administrar decenas de repos a mano es tedioso y propenso a errores: cada repo tiene su pestaña de
+          <em>Settings</em> con docenas de opciones. <strong>ghss</strong> lee la configuración de un repo que eliges como
+          fuente de verdad y te deja replicarla en un listado de repos destino, mostrándote exactamente qué va a cambiar
+          en cada uno antes de aplicar nada.
+        </p>
+      </section>
+
+      <section>
+        <h2>Flujo en 4 pasos</h2>
+        <ol class="flow">
+          <li><strong>Conecta</strong> con GitHub (gh CLI, token personal o device flow).</li>
+          <li><strong>Elige repos</strong>: marca uno como referencia ★ y selecciona los destinos (filtra por organización, equipo o búsqueda).</li>
+          <li><strong>Audita</strong>: ghss compara cada destino con la referencia y te muestra las diferencias en streaming.</li>
+          <li><strong>Sincroniza</strong>: desmarca lo que no quieras propagar y aplica. Los fallos de un repo no detienen al resto.</li>
+        </ol>
+      </section>
+
+      <section>
+        <h2>Qué configuración sincroniza</h2>
+        <div class="grid">
+          <div class="card">
+            <h3>Default branch</h3>
+            <p>La rama por defecto del repositorio (si existe en el destino).</p>
+          </div>
+          <div class="card">
+            <h3>Features</h3>
+            <p>Wikis, Issues, Projects, Discussions y «Allow forking».</p>
+          </div>
+          <div class="card">
+            <h3>Pull Requests</h3>
+            <p>Merge/squash/rebase, mensajes de commit, auto-merge, sugerir actualización de ramas y borrado automático de ramas.</p>
+          </div>
+          <div class="card">
+            <h3>Others</h3>
+            <p>Requerir firma (sign-off) en commits desde la web.</p>
+          </div>
+          <div class="card">
+            <h3>Tags</h3>
+            <p>Rulesets con destino <code>tag</code> (protección de tags moderna).</p>
+          </div>
+          <div class="card">
+            <h3>Rules</h3>
+            <p>Rulesets de rama + branch protection clásica de las ramas protegidas.</p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Diseñada para listas grandes</h2>
+        <ul class="features">
+          <li><strong>Selección granular</strong>: deselecciona settings concretos por repo antes de sincronizar; todo marcado por defecto, con «Marcar / Desmarcar todo».</li>
+          <li><strong>Auditoría en streaming</strong>: los resultados aparecen conforme se procesan, con barra de progreso.</li>
+          <li><strong>Filtros que persisten</strong>: búsqueda, organización y equipo, sin perderse al navegar.</li>
+          <li><strong>Robusto ante errores</strong>: un repo privado en plan free, archivado o sin permisos no rompe el lote — se marca como fallido con un mensaje claro y el resto continúa.</li>
+          <li><strong>Repos archivados</strong> ocultos por defecto y no seleccionables como destino (sí como referencia).</li>
+        </ul>
+      </section>
+
+      <section id="install">
+        <h2>Instalación</h2>
+        <h3>Homebrew (macOS)</h3>
+        <pre><code>brew install --cask theburrowhub/tap/ghss</code></pre>
+        <p class="muted">Actualizar: <code>brew upgrade --cask ghss</code></p>
+
+        <h3>Descarga directa</h3>
+        <p>
+          Descarga el <code>.dmg</code> de la
+          <a href="https://github.com/theburrowhub/ghss/releases/latest">última release</a>,
+          ábrelo y arrastra <strong>ghss</strong> a Aplicaciones.
+        </p>
+
+        <h3>Desde el código</h3>
+        <pre><code>git clone https://github.com/theburrowhub/ghss
+cd ghss
+npm install
+npm run tauri build</code></pre>
+      </section>
+
+      <section>
+        <h2>Autenticación</h2>
+        <p>Elige el método que prefieras al abrir la app:</p>
+        <ul class="features">
+          <li><strong>GitHub CLI</strong> (por defecto): reutiliza tu sesión de <code>gh auth login</code>.</li>
+          <li><strong>Token personal (PAT)</strong>: pégalo y se guarda en el llavero del sistema. Necesita el scope <code>repo</code> para sincronizar repos privados.</li>
+          <li><strong>OAuth Device Flow</strong>: introduce un código en github.com (requiere el Client ID de tu propia OAuth App).</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Limitaciones conocidas</h2>
+        <p class="muted">
+          Algunos toggles de la UI de GitHub no tienen API pública y no se sincronizan:
+          Sponsorships, restringir edición de wikis a colaboradores, comentarios en commits individuales,
+          autocierre de issues con PRs enlazados, límite de actualizaciones por push, incluir objetos Git LFS
+          en archivos, y «PR creation allowed by».
+        </p>
+      </section>
+
+      <section>
+        <h2>Privacidad</h2>
+        <p class="muted">
+          ghss es una app local: tu token nunca sale de tu equipo (se guarda en el llavero del sistema) y todas las
+          llamadas van directas a la API de GitHub. No hay servidores intermedios ni telemetría.
+        </p>
+      </section>
+    </main>
+
+    <footer>
+      <div class="wrap">
+        <p>
+          <a href="https://github.com/theburrowhub/ghss">GitHub</a> ·
+          <a href="https://github.com/theburrowhub/ghss/releases">Releases</a> ·
+          <a href="https://github.com/theburrowhub/ghss/issues">Issues</a>
+        </p>
+        <p class="muted">theburrowhub · construida con Tauri 2, Rust y React</p>
+      </div>
+    </footer>
+  </body>
+</html>
