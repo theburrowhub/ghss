@@ -1,6 +1,6 @@
 use crate::auth;
 use crate::diff::diff_snapshots;
-use crate::github::GithubClient;
+use crate::github::{GhError, GithubClient};
 use crate::model::*;
 use crate::sync::{apply_actions, plan_actions, ActionResult};
 use serde::{Deserialize, Serialize};
@@ -89,6 +89,21 @@ async fn client(state: &State<'_, AppState>) -> CmdResult<GithubClient> {
 #[tauri::command]
 pub async fn list_repos(state: State<'_, AppState>) -> CmdResult<Vec<RepoInfo>> {
     client(&state).await?.list_repos().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn list_org_teams(state: State<'_, AppState>, org: String) -> CmdResult<Vec<TeamInfo>> {
+    match client(&state).await?.list_org_teams(&org).await {
+        Ok(teams) => Ok(teams),
+        // Cuentas personales (o sin acceso a equipos) devuelven 404: sin equipos, no es error.
+        Err(GhError::Api { status, .. }) if status == reqwest::StatusCode::NOT_FOUND => Ok(vec![]),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+pub async fn list_team_repos(state: State<'_, AppState>, org: String, team_slug: String) -> CmdResult<Vec<String>> {
+    client(&state).await?.list_team_repos(&org, &team_slug).await.map_err(|e| e.to_string())
 }
 
 fn split_full_name(full: &str) -> CmdResult<(String, String)> {

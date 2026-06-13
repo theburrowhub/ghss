@@ -27,10 +27,21 @@ impl GithubClient {
             }
         }
 
+        // Rulesets pueden no estar disponibles (repo privado en plan free, feature de pago):
+        // GitHub responde 403/404. En ese caso los ignoramos en vez de romper el snapshot.
+        let feature_unavailable = |e: &GhError| {
+            matches!(e, GhError::Api { status, .. } if *status == StatusCode::FORBIDDEN || *status == StatusCode::NOT_FOUND)
+        };
+
         let mut summaries = Vec::new();
-        for page in 1.. {
+        'pages: for page in 1.. {
             let path = format!("/repos/{owner}/{name}/rulesets?per_page=100&page={page}&includes_parents=false");
-            let batch: Vec<Value> = serde_json::from_value(self.get_json(&path).await?)
+            let raw = match self.get_json(&path).await {
+                Ok(v) => v,
+                Err(e) if feature_unavailable(&e) => break 'pages,
+                Err(e) => return Err(e),
+            };
+            let batch: Vec<Value> = serde_json::from_value(raw)
                 .map_err(|e| GhError::Api { status: StatusCode::OK, body: format!("respuesta inesperada de {path}: {e}") })?;
             let n = batch.len();
             summaries.extend(batch);
@@ -42,7 +53,11 @@ impl GithubClient {
         for s in summaries {
             // Defensive: skip summaries without a numeric id (id 0 would produce an invalid PUT later)
             let Some(id) = s["id"].as_u64() else { continue };
-            let full = self.get_json(&format!("/repos/{owner}/{name}/rulesets/{id}")).await?;
+            let full = match self.get_json(&format!("/repos/{owner}/{name}/rulesets/{id}")).await {
+                Ok(v) => v,
+                Err(e) if feature_unavailable(&e) => continue,
+                Err(e) => return Err(e),
+            };
             rulesets.push(RulesetSummary {
                 id,
                 name: full["name"].as_str().unwrap_or_default().into(),
@@ -56,8 +71,9 @@ impl GithubClient {
             let path = format!("/repos/{owner}/{name}/branches/{b}/protection");
             match self.get_json(&path).await {
                 Ok(get) => branch_protections.push(BranchProtection { branch: b.clone(), config: protection_get_to_put(&get) }),
-                // Rama protegida solo por rulesets: no hay protección clásica que snapshotear.
-                Err(GhError::Api { status, .. }) if status == StatusCode::NOT_FOUND => {}
+                // Rama protegida solo por rulesets, o protección clásica no disponible en el
+                // plan del repo (403): no hay protección clásica que snapshotear.
+                Err(GhError::Api { status, .. }) if status == StatusCode::NOT_FOUND || status == StatusCode::FORBIDDEN => {}
                 Err(e) => return Err(e),
             }
         }

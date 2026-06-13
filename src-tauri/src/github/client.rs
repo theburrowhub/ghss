@@ -109,6 +109,45 @@ impl GithubClient {
         self.send_json(Method::PUT, &format!("/repos/{owner}/{name}/branches/{branch}/protection"), config).await
     }
 
+    pub async fn list_org_teams(&self, org: &str) -> GhResult<Vec<crate::model::TeamInfo>> {
+        let mut teams = Vec::new();
+        for page in 1.. {
+            let path = format!("/orgs/{org}/teams?per_page=100&page={page}");
+            let batch: Vec<Value> = serde_json::from_value(self.get_json(&path).await?)
+                .map_err(|e| GhError::Api { status: StatusCode::OK, body: format!("respuesta inesperada de /orgs/{org}/teams: {e}") })?;
+            let n = batch.len();
+            for t in batch {
+                teams.push(crate::model::TeamInfo {
+                    slug: t["slug"].as_str().unwrap_or_default().into(),
+                    name: t["name"].as_str().unwrap_or_default().into(),
+                });
+            }
+            if n < 100 {
+                break;
+            }
+        }
+        Ok(teams)
+    }
+
+    pub async fn list_team_repos(&self, org: &str, team_slug: &str) -> GhResult<Vec<String>> {
+        let mut repos = Vec::new();
+        for page in 1.. {
+            let path = format!("/orgs/{org}/teams/{team_slug}/repos?per_page=100&page={page}");
+            let batch: Vec<Value> = serde_json::from_value(self.get_json(&path).await?)
+                .map_err(|e| GhError::Api { status: StatusCode::OK, body: format!("respuesta inesperada de team repos: {e}") })?;
+            let n = batch.len();
+            for r in batch {
+                if let Some(full) = r["full_name"].as_str() {
+                    repos.push(full.to_string());
+                }
+            }
+            if n < 100 {
+                break;
+            }
+        }
+        Ok(repos)
+    }
+
     pub async fn list_repos(&self) -> GhResult<Vec<RepoInfo>> {
         let mut repos = Vec::new();
         for page in 1.. {

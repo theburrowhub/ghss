@@ -120,3 +120,35 @@ async fn write_methods_hit_expected_endpoints() {
     client.update_ruleset("acme", "t1", 9, &json!({"name": "r"})).await.unwrap();
     client.put_branch_protection("acme", "t1", "main", &json!({"enforce_admins": true})).await.unwrap();
 }
+
+#[tokio::test]
+async fn fetch_snapshot_tolerates_rulesets_403_on_free_private_repo() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET")).and(path("/repos/acme/priv"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "full_name": "acme/priv", "default_branch": "main",
+            "has_wiki": true, "has_issues": true, "has_projects": false,
+            "has_discussions": false, "allow_forking": false,
+            "web_commit_signoff_required": false,
+            "allow_merge_commit": true, "allow_squash_merge": true,
+            "allow_rebase_merge": true, "allow_update_branch": false,
+            "allow_auto_merge": false, "delete_branch_on_merge": false
+        })))
+        .mount(&server).await;
+    Mock::given(method("GET")).and(path("/repos/acme/priv/branches"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([{ "name": "main", "protected": false }])))
+        .mount(&server).await;
+    // Rulesets bloqueados por plan: 403 "Upgrade to GitHub Pro or make this repository public".
+    Mock::given(method("GET")).and(path("/repos/acme/priv/rulesets"))
+        .respond_with(ResponseTemplate::new(403).set_body_json(json!({
+            "message": "Upgrade to GitHub Pro or make this repository public to enable this feature.",
+            "status": "403"
+        })))
+        .mount(&server).await;
+
+    let client = GithubClient::new(server.uri(), "tok".into());
+    let snap = client.fetch_snapshot("acme", "priv").await.unwrap();
+    assert_eq!(snap.repo, "acme/priv");
+    assert!(snap.rulesets.is_empty(), "los rulesets bloqueados por plan se ignoran");
+    assert!(snap.features.has_wiki);
+}

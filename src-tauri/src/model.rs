@@ -12,6 +12,12 @@ pub struct RepoInfo {
     pub description: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TeamInfo {
+    pub slug: String,
+    pub name: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct Features {
     pub has_wiki: bool,
