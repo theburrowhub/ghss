@@ -9,11 +9,28 @@ interface Props {
   onSelectedChange: (next: Set<string>) => void;
 }
 
-function fmt(v: unknown): string {
-  if (v === null || v === undefined) return "—";
-  if (typeof v === "boolean") return v ? "✓" : "✗";
-  if (typeof v === "string") return v;
-  return JSON.stringify(v).slice(0, 60);
+/** Pinta un valor escalar con palabra + color según su significado (no según la columna). */
+function ScalarValue({ v }: { v: unknown }) {
+  if (typeof v === "boolean") {
+    return <span className={`state ${v ? "on" : "off"}`}>{v ? "Activado" : "Desactivado"}</span>;
+  }
+  if (v === null || v === undefined) return <span className="state none">no definido</span>;
+  if (typeof v === "string") return <span className="state str">{v === "" ? "(vacío)" : v}</span>;
+  return <span className="state obj">objeto</span>;
+}
+
+const isScalar = (v: unknown) => typeof v !== "object" || v === null;
+
+/** Etiqueta de acción explícita: deja claro qué le pasará al repo destino. */
+function actionFor(c: SettingChange): { text: string; cls: string } {
+  if (typeof c.desired === "boolean") {
+    return c.desired
+      ? { text: "Se activará", cls: "enable" }
+      : { text: "Se desactivará", cls: "disable" };
+  }
+  if (c.current === null || c.current === undefined) return { text: "Se creará", cls: "create" };
+  if (typeof c.desired === "object") return { text: "Se actualizará", cls: "update" };
+  return { text: "Se cambiará", cls: "change" };
 }
 
 export function DiffTree({ changes, selectable, selected, onSelectedChange }: Props) {
@@ -86,9 +103,17 @@ export function DiffTree({ changes, selectable, selected, onSelectedChange }: Pr
                   )}
                   <span style={{ flex: 1 }}>{c.label}</span>
                   {c.note && <span className="muted">{c.note}</span>}
-                  <span className="val current">{fmt(c.current)}</span>
-                  <span className="arrow">→</span>
-                  <span className="val desired">{fmt(c.desired)}</span>
+                  {isScalar(c.current) && isScalar(c.desired) && !(c.current === null && c.desired === null) && (
+                    <span className="transition">
+                      <ScalarValue v={c.current} />
+                      <span className="arrow">→</span>
+                      <ScalarValue v={c.desired} />
+                    </span>
+                  )}
+                  {(() => {
+                    const a = actionFor(c);
+                    return <span className={`action ${a.cls}`}>{a.text}</span>;
+                  })()}
                 </div>
               ))}
           </div>
