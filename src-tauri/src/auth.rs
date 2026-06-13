@@ -15,10 +15,25 @@ pub enum AuthError {
     Device(String),
 }
 
+/// PATH aumentado con las ubicaciones habituales de binarios. Las apps GUI de macOS
+/// lanzadas desde Finder/.app no heredan el PATH del shell, así que `gh` (típicamente en
+/// /opt/homebrew/bin o /usr/local/bin) no se encuentra. Prependemos esas rutas al PATH
+/// existente para que `Command::new("gh")` lo localice.
+fn augmented_path() -> String {
+    let common = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"];
+    let existing = std::env::var("PATH").unwrap_or_default();
+    let mut parts: Vec<&str> = common.to_vec();
+    if !existing.is_empty() {
+        parts.push(&existing);
+    }
+    parts.join(":")
+}
+
 /// Obtiene el token de la sesión del CLI `gh` (gh auth token).
 pub async fn gh_cli_token() -> Result<String, AuthError> {
     let out = tokio::process::Command::new("gh")
         .args(["auth", "token"])
+        .env("PATH", augmented_path())
         .output()
         .await
         .map_err(|e| AuthError::GhCli(e.to_string()))?;
