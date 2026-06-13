@@ -28,7 +28,14 @@ export interface AuditResult {
   reference: unknown;
   diffs: RepoDiff[];
   errors: [string, string][];
+  // Campos de UI (no provienen del backend): estado del streaming.
+  streaming?: boolean;
+  total?: number;
 }
+
+// Eventos emitidos por el comando `audit` durante el streaming.
+export interface AuditStartedEvent { total: number; }
+export interface AuditRepoEvent { repo: string; diff: RepoDiff | null; error: string | null; }
 
 export interface ActionResult { description: string; ok: boolean; error: string | null; }
 export interface RepoSyncResult { repo: string; results: ActionResult[]; fatal: string | null; }

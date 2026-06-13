@@ -104,11 +104,25 @@ pub struct AuditResult {
     pub errors: Vec<(String, String)>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+struct AuditStarted {
+    total: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct AuditRepoEvent {
+    repo: String,
+    diff: Option<RepoDiff>,
+    error: Option<String>,
+}
+
 #[tauri::command]
-pub async fn audit(state: State<'_, AppState>, reference: String, targets: Vec<String>) -> CmdResult<AuditResult> {
+pub async fn audit(app: AppHandle, state: State<'_, AppState>, reference: String, targets: Vec<String>) -> CmdResult<AuditResult> {
     let c = client(&state).await?;
     let (ro, rn) = split_full_name(&reference)?;
     let ref_snap = c.fetch_snapshot(&ro, &rn).await.map_err(|e| e.to_string())?;
+
+    let _ = app.emit("audit-started", AuditStarted { total: targets.len() });
 
     let fetches = targets.into_iter().map(|t| {
         let c = c.clone();
@@ -121,20 +135,28 @@ pub async fn audit(state: State<'_, AppState>, reference: String, targets: Vec<S
         }
     });
     // Concurrencia acotada: cientos de fetches simultáneos disparan los
-    // secondary rate limits de GitHub.
+    // secondary rate limits de GitHub. Emitimos cada repo en cuanto termina
+    // (streaming) para que la UI vaya rellenando resultados sin congelarse.
     use futures::StreamExt;
-    let results: Vec<(String, Result<RepoSettingsSnapshot, String>)> =
-        futures::stream::iter(fetches).buffer_unordered(8).collect().await;
+    let mut stream = futures::stream::iter(fetches).buffer_unordered(8);
 
     let mut diffs = Vec::new();
     let mut errors = Vec::new();
-    for (repo, res) in results {
+    while let Some((repo, res)) = stream.next().await {
         match res {
-            Ok(snap) => diffs.push(diff_snapshots(&ref_snap, &snap)),
-            Err(e) => errors.push((repo, e)),
+            Ok(snap) => {
+                let d = diff_snapshots(&ref_snap, &snap);
+                let _ = app.emit("audit-repo", AuditRepoEvent { repo, diff: Some(d.clone()), error: None });
+                diffs.push(d);
+            }
+            Err(e) => {
+                let _ = app.emit("audit-repo", AuditRepoEvent { repo: repo.clone(), diff: None, error: Some(e.clone()) });
+                errors.push((repo, e));
+            }
         }
     }
-    // buffer_unordered devuelve en orden de finalización; ordenamos para una UI estable.
+    // buffer_unordered devuelve en orden de finalización; ordenamos el resultado
+    // final autoritativo para una UI estable (el streaming es solo incremental).
     diffs.sort_by(|a, b| a.repo.cmp(&b.repo));
     errors.sort_by(|a, b| a.0.cmp(&b.0));
     Ok(AuditResult { reference: ref_snap, diffs, errors })

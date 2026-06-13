@@ -14,6 +14,9 @@ export function AuditView({ reference, result, onBack, onProceed }: Props) {
   const [open, setOpen] = useState<Set<string>>(new Set());
   const diverged = result.diffs.filter((d) => d.changes.length > 0);
   const visible = onlyDiverged ? diverged : result.diffs;
+  const streaming = result.streaming === true;
+  const processed = result.diffs.length + result.errors.length;
+  const total = result.total ?? processed;
 
   return (
     <div className="view">
@@ -21,11 +24,22 @@ export function AuditView({ reference, result, onBack, onProceed }: Props) {
         <button onClick={onBack}>← Repos</button>
         <h3 style={{ margin: 0 }}>Auditoría contra <span className="mono">{reference}</span></h3>
         <div style={{ flex: 1 }} />
+        {streaming && (
+          <span className="muted" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <span className="spinner spinner-sm" /> Auditando… {processed} de {total}
+          </span>
+        )}
         <label><input type="checkbox" checked={onlyDiverged} onChange={(e) => setOnlyDiverged(e.target.checked)} /> solo desincronizados</label>
-        <button className="primary" disabled={diverged.length === 0} onClick={() => onProceed(diverged.map((d) => d.repo))}>
-          Sincronizar los {diverged.length} divergentes →
+        <button className="primary" disabled={streaming || diverged.length === 0} onClick={() => onProceed(diverged.map((d) => d.repo))}>
+          {streaming ? "Esperando…" : `Sincronizar los ${diverged.length} divergentes →`}
         </button>
       </div>
+
+      {streaming && (
+        <div className="progress-bar" style={{ marginBottom: 12 }}>
+          <div className="progress-fill" style={{ width: total > 0 ? `${(processed / total) * 100}%` : "0%" }} />
+        </div>
+      )}
 
       {result.errors.map(([repo, err]) => (
         <div className="card" key={repo} style={{ marginBottom: 8, borderColor: "var(--danger)" }}>
