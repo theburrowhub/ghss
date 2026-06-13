@@ -8,6 +8,7 @@ export interface RepoInfo {
   name: string;
   private: boolean;
   admin: boolean;
+  archived: boolean;
   default_branch: string;
   description: string | null;
 }

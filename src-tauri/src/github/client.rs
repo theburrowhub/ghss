@@ -176,6 +176,7 @@ impl GithubClient {
                     name: r["name"].as_str().unwrap_or_default().into(),
                     private: r["private"].as_bool().unwrap_or(false),
                     admin: r["permissions"]["admin"].as_bool().unwrap_or(false),
+                    archived: r["archived"].as_bool().unwrap_or(false),
                     default_branch: r["default_branch"].as_str().unwrap_or("main").into(),
                     description: r["description"].as_str().map(String::from),
                 });

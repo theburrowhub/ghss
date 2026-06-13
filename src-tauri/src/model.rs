@@ -8,6 +8,7 @@ pub struct RepoInfo {
     pub name: String,
     pub private: bool,
     pub admin: bool,
+    pub archived: bool,
     pub default_branch: String,
     pub description: Option<String>,
 }

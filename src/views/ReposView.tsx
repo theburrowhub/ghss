@@ -20,12 +20,15 @@ interface Props {
   teams: TeamInfo[];
   teamRepos: Set<string> | null;
   teamBusy: boolean;
+  showArchived: boolean;
+  onShowArchived: (v: boolean) => void;
 }
 
 export function ReposView(props: Props) {
   const {
     repos, reference, targets, onReference, onTargets, onAudit, onStatus, busy,
     search, onSearch, owner, onOwner, teamSlug, onTeamSlug, teams, teamRepos, teamBusy,
+    showArchived, onShowArchived,
   } = props;
 
   const owners = useMemo(() => ["(todos)", ...Array.from(new Set(repos.map((r) => r.owner))).sort()], [repos]);
@@ -37,12 +40,14 @@ export function ReposView(props: Props) {
   const matchesFilter = (r: RepoInfo) =>
     (owner === "(todos)" || r.owner === owner) &&
     (teamRepos === null || teamRepos.has(r.full_name)) &&
+    (showArchived || !r.archived) &&
     r.full_name.toLowerCase().includes(search.toLowerCase());
 
   const refRepo = repos.find((r) => r.full_name === reference) ?? null;
   // La referencia sale de la lista común: se muestra fija arriba como "destacado".
   const visible = repos.filter((r) => r.full_name !== reference && matchesFilter(r));
-  const selectableVisible = visible.filter((r) => r.admin);
+  // Los repos archivados son read-only: no pueden ser destino de sincronización.
+  const selectableVisible = visible.filter((r) => r.admin && !r.archived);
   const selectedVisible = selectableVisible.filter((r) => targets.has(r.full_name)).length;
   const allSelected = selectableVisible.length > 0 && selectedVisible === selectableVisible.length;
 
@@ -87,6 +92,9 @@ export function ReposView(props: Props) {
           </select>
         )}
         {teamBusy && <span className="spinner spinner-sm" />}
+        <label className="muted" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+          <input type="checkbox" checked={showArchived} onChange={(e) => onShowArchived(e.target.checked)} /> archivados
+        </label>
         <div className="spacer" style={{ flex: 1 }} />
         <span className="muted">{targets.size} destinos</span>
         <button className="primary" disabled={!reference || targets.size === 0 || busy} onClick={onAudit}>
@@ -125,13 +133,18 @@ export function ReposView(props: Props) {
           <div className="repo-row" key={r.full_name}>
             <input
               type="checkbox"
-              title={r.admin ? "Seleccionar como destino" : "Necesitas permiso admin para sincronizar este repo"}
-              disabled={!r.admin}
+              title={
+                r.archived ? "Repo archivado (read-only): no puede ser destino, solo referencia"
+                : r.admin ? "Seleccionar como destino"
+                : "Necesitas permiso admin para sincronizar este repo"
+              }
+              disabled={!r.admin || r.archived}
               checked={targets.has(r.full_name)}
               onChange={() => toggleTarget(r.full_name)}
             />
             <span className="mono">{r.full_name}</span>
             {r.private && <span className="badge">private</span>}
+            {r.archived && <span className="badge muted">archivado</span>}
             {!r.admin && <span className="badge muted">sin admin</span>}
             <span className="muted" style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {r.description}

@@ -32,6 +32,7 @@ export default function App() {
   const [teams, setTeams] = useState<TeamInfo[]>([]);
   const [teamRepos, setTeamRepos] = useState<Set<string> | null>(null); // null = sin filtro de equipo
   const [teamBusy, setTeamBusy] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   // Al cambiar de owner: reseteamos el equipo y cargamos los equipos de esa organización.
   useEffect(() => {
@@ -181,6 +182,8 @@ export default function App() {
           teams={teams}
           teamRepos={teamRepos}
           teamBusy={teamBusy}
+          showArchived={showArchived}
+          onShowArchived={setShowArchived}
         />
       )}
       {stage === "audit" && reference && auditResult && (
