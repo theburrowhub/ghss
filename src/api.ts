@@ -1,0 +1,14 @@
+import { invoke } from "@tauri-apps/api/core";
+import type { AuditResult, DeviceStart, RepoInfo, RepoSyncResult, SettingChange, UserInfo } from "./types";
+
+export const authWithGh = () => invoke<UserInfo>("auth_with_gh");
+export const authWithPat = (pat: string, save: boolean) => invoke<UserInfo>("auth_with_pat", { pat, save });
+export const authLoadSaved = () => invoke<UserInfo | null>("auth_load_saved");
+export const authDeviceStart = (clientId: string) => invoke<DeviceStart>("auth_device_start", { clientId });
+export const authDevicePoll = (clientId: string, deviceCode: string) =>
+  invoke<UserInfo | null>("auth_device_poll", { clientId, deviceCode });
+export const logout = () => invoke<void>("logout");
+export const listRepos = () => invoke<RepoInfo[]>("list_repos");
+export const audit = (reference: string, targets: string[]) => invoke<AuditResult>("audit", { reference, targets });
+export const applySync = (plans: { repo: string; changes: SettingChange[] }[]) =>
+  invoke<RepoSyncResult[]>("apply_sync", { plans });
