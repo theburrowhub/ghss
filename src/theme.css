@@ -54,8 +54,16 @@ input[type="text"], input[type="password"] {
   border-bottom: 1px solid var(--border);
 }
 .repo-row:hover { background: var(--bg-subtle); }
-.star { cursor: pointer; font-size: 16px; color: var(--fg-muted); background: none; border: none; padding: 2px; }
-.star.active { color: #e3b341; }
+.repo-row:last-child { border-bottom: none; }
+.ref-btn { font-size: 12px; padding: 4px 10px; white-space: nowrap; }
+
+/* Panel de referencia destacado, fijo bajo los filtros. */
+.ref-panel { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; border-color: rgba(227, 179, 65, 0.55); background: rgba(227, 179, 65, 0.06); }
+.ref-icon { font-size: 20px; color: #e3b341; }
+.ref-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--fg-muted); margin-bottom: 2px; }
+
+/* Barra de acciones masivas de la lista. */
+.list-toolbar { display: flex; align-items: center; gap: 12px; margin: 0 0 8px; }
 
 .diff-cat { margin-bottom: 4px; }
 .diff-cat-header { display: flex; align-items: center; gap: 8px; padding: 6px 8px; cursor: pointer; border-radius: 6px; }
