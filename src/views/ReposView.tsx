@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
-import { listOrgTeams, listTeamRepos } from "../api";
+import { useEffect, useMemo } from "react";
 import type { RepoInfo, TeamInfo } from "../types";
 
 interface Props {
@@ -11,47 +10,25 @@ interface Props {
   onAudit: () => void;
   onStatus: (s: string) => void;
   busy: boolean;
+  // Filtros controlados desde App (persisten al ir y volver de la auditoría).
+  search: string;
+  onSearch: (s: string) => void;
+  owner: string;
+  onOwner: (o: string) => void;
+  teamSlug: string;
+  onTeamSlug: (s: string) => void;
+  teams: TeamInfo[];
+  teamRepos: Set<string> | null;
+  teamBusy: boolean;
 }
 
-export function ReposView({ repos, reference, targets, onReference, onTargets, onAudit, onStatus, busy }: Props) {
-  const [q, setQ] = useState("");
-  const [owner, setOwner] = useState("(todos)");
+export function ReposView(props: Props) {
+  const {
+    repos, reference, targets, onReference, onTargets, onAudit, onStatus, busy,
+    search, onSearch, owner, onOwner, teamSlug, onTeamSlug, teams, teamRepos, teamBusy,
+  } = props;
+
   const owners = useMemo(() => ["(todos)", ...Array.from(new Set(repos.map((r) => r.owner))).sort()], [repos]);
-
-  const [teams, setTeams] = useState<TeamInfo[]>([]);
-  const [teamSlug, setTeamSlug] = useState("(todos)");
-  const [teamRepos, setTeamRepos] = useState<Set<string> | null>(null); // null = sin filtro de equipo
-  const [teamBusy, setTeamBusy] = useState(false);
-
-  // Al cambiar de owner: reseteamos el equipo y cargamos los equipos de esa organización.
-  useEffect(() => {
-    setTeamSlug("(todos)");
-    setTeamRepos(null);
-    if (owner === "(todos)") {
-      setTeams([]);
-      return;
-    }
-    let cancelled = false;
-    listOrgTeams(owner)
-      .then((t) => { if (!cancelled) setTeams(t); })
-      .catch(() => { if (!cancelled) setTeams([]); });
-    return () => { cancelled = true; };
-  }, [owner]);
-
-  // Al elegir un equipo: cargamos sus repos para filtrar la lista.
-  useEffect(() => {
-    if (owner === "(todos)" || teamSlug === "(todos)") {
-      setTeamRepos(null);
-      return;
-    }
-    let cancelled = false;
-    setTeamBusy(true);
-    listTeamRepos(owner, teamSlug)
-      .then((r) => { if (!cancelled) setTeamRepos(new Set(r)); })
-      .catch(() => { if (!cancelled) setTeamRepos(new Set()); })
-      .finally(() => { if (!cancelled) setTeamBusy(false); });
-    return () => { cancelled = true; };
-  }, [owner, teamSlug]);
 
   useEffect(() => {
     onStatus(`${targets.size} repos destino seleccionados · referencia: ${reference ?? "ninguna"}`);
@@ -60,7 +37,7 @@ export function ReposView({ repos, reference, targets, onReference, onTargets, o
   const matchesFilter = (r: RepoInfo) =>
     (owner === "(todos)" || r.owner === owner) &&
     (teamRepos === null || teamRepos.has(r.full_name)) &&
-    r.full_name.toLowerCase().includes(q.toLowerCase());
+    r.full_name.toLowerCase().includes(search.toLowerCase());
 
   const refRepo = repos.find((r) => r.full_name === reference) ?? null;
   // La referencia sale de la lista común: se muestra fija arriba como "destacado".
@@ -84,22 +61,27 @@ export function ReposView({ repos, reference, targets, onReference, onTargets, o
     onReference(full);
   };
 
-  const toggleSelectAll = () => {
+  const selectAll = () => {
     const next = new Set(targets);
-    if (allSelected) selectableVisible.forEach((r) => next.delete(r.full_name));
-    else selectableVisible.forEach((r) => next.add(r.full_name));
+    selectableVisible.forEach((r) => next.add(r.full_name));
+    onTargets(next);
+  };
+
+  const deselectAll = () => {
+    const next = new Set(targets);
+    selectableVisible.forEach((r) => next.delete(r.full_name));
     onTargets(next);
   };
 
   return (
     <div className="view">
       <div style={{ display: "flex", gap: 10, marginBottom: 14, alignItems: "center" }}>
-        <input type="text" placeholder="Buscar repos…" value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: 320 }} />
-        <select value={owner} onChange={(e) => setOwner(e.target.value)}>
+        <input type="text" placeholder="Buscar repos…" value={search} onChange={(e) => onSearch(e.target.value)} style={{ maxWidth: 320 }} />
+        <select value={owner} onChange={(e) => onOwner(e.target.value)}>
           {owners.map((o) => <option key={o}>{o}</option>)}
         </select>
         {owner !== "(todos)" && teams.length > 0 && (
-          <select value={teamSlug} onChange={(e) => setTeamSlug(e.target.value)} title="Filtrar por equipo de la organización">
+          <select value={teamSlug} onChange={(e) => onTeamSlug(e.target.value)} title="Filtrar por equipo de la organización">
             <option value="(todos)">Todos los equipos</option>
             {teams.map((t) => <option key={t.slug} value={t.slug}>{t.name}</option>)}
           </select>
@@ -129,9 +111,10 @@ export function ReposView({ repos, reference, targets, onReference, onTargets, o
       )}
 
       <div className="list-toolbar">
-        <button onClick={toggleSelectAll} disabled={selectableVisible.length === 0}>
-          {allSelected ? "Quitar selección del filtro" : `Seleccionar todo (${selectableVisible.length})`}
+        <button onClick={selectAll} disabled={selectableVisible.length === 0 || allSelected}>
+          Seleccionar todo ({selectableVisible.length})
         </button>
+        <button onClick={deselectAll} disabled={selectedVisible === 0}>Deseleccionar todo</button>
         <span className="muted">
           {selectedVisible} de {selectableVisible.length} seleccionables en el filtro actual
         </span>

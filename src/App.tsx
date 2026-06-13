@@ -1,7 +1,7 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { applySync, audit, listRepos, logout } from "./api";
-import type { AuditRepoEvent, AuditResult, AuditStartedEvent, RepoInfo, RepoSyncResult, SettingChange, UserInfo } from "./types";
+import { applySync, audit, listOrgTeams, listRepos, listTeamRepos, logout } from "./api";
+import type { AuditRepoEvent, AuditResult, AuditStartedEvent, RepoInfo, RepoSyncResult, SettingChange, TeamInfo, UserInfo } from "./types";
 import { AuthView } from "./views/AuthView";
 import { ReposView } from "./views/ReposView";
 import { AuditView } from "./views/AuditView";
@@ -24,6 +24,44 @@ export default function App() {
   const [warning, setWarning] = useState<string | null>(null);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState<{ title: string; detail?: string }>({ title: "" });
+
+  // Estado de filtros de la vista de repos: vive aquí para persistir al ir y volver de la auditoría.
+  const [search, setSearch] = useState("");
+  const [ownerFilter, setOwnerFilter] = useState("(todos)");
+  const [teamSlug, setTeamSlug] = useState("(todos)");
+  const [teams, setTeams] = useState<TeamInfo[]>([]);
+  const [teamRepos, setTeamRepos] = useState<Set<string> | null>(null); // null = sin filtro de equipo
+  const [teamBusy, setTeamBusy] = useState(false);
+
+  // Al cambiar de owner: reseteamos el equipo y cargamos los equipos de esa organización.
+  useEffect(() => {
+    setTeamSlug("(todos)");
+    setTeamRepos(null);
+    if (ownerFilter === "(todos)") {
+      setTeams([]);
+      return;
+    }
+    let cancelled = false;
+    listOrgTeams(ownerFilter)
+      .then((t) => { if (!cancelled) setTeams(t); })
+      .catch(() => { if (!cancelled) setTeams([]); });
+    return () => { cancelled = true; };
+  }, [ownerFilter]);
+
+  // Al elegir un equipo: cargamos sus repos para filtrar la lista.
+  useEffect(() => {
+    if (ownerFilter === "(todos)" || teamSlug === "(todos)") {
+      setTeamRepos(null);
+      return;
+    }
+    let cancelled = false;
+    setTeamBusy(true);
+    listTeamRepos(ownerFilter, teamSlug)
+      .then((r) => { if (!cancelled) setTeamRepos(new Set(r)); })
+      .catch(() => { if (!cancelled) setTeamRepos(new Set()); })
+      .finally(() => { if (!cancelled) setTeamBusy(false); });
+    return () => { cancelled = true; };
+  }, [ownerFilter, teamSlug]);
 
   // Clasifica el error: un 401 (token inválido/caducado) corta la sesión y vuelve a login.
   const handleError = useCallback((e: unknown) => {
@@ -134,6 +172,15 @@ export default function App() {
           onAudit={runAudit}
           onStatus={setStatus}
           busy={busy}
+          search={search}
+          onSearch={setSearch}
+          owner={ownerFilter}
+          onOwner={setOwnerFilter}
+          teamSlug={teamSlug}
+          onTeamSlug={setTeamSlug}
+          teams={teams}
+          teamRepos={teamRepos}
+          teamBusy={teamBusy}
         />
       )}
       {stage === "audit" && reference && auditResult && (
