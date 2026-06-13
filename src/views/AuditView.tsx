@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DiffTree } from "../components/DiffTree";
+import { friendlyError } from "./StatusBar";
 import type { AuditResult, SettingChange } from "../types";
 
 interface Props {
@@ -93,7 +94,7 @@ export function AuditView({ reference, result, onBack, onSync, onStatus, busy }:
 
       {result.errors.map(([repo, err]) => (
         <div className="card" key={repo} style={{ marginBottom: 8, borderColor: "var(--danger)" }}>
-          <span className="mono">{repo}</span> <span className="badge err">error</span> <span className="muted">{err}</span>
+          <span className="mono">{repo}</span> <span className="badge err">no auditado</span> <span className="muted">{friendlyError(err)}</span>
         </div>
       ))}
 
