@@ -20,7 +20,9 @@ jobs:
         include:
           - runner: macos-14
             target: aarch64-apple-darwin
-          - runner: macos-13
+          # Intel se compila cruzando desde el runner arm (macos-14): el runner
+          # Intel (macos-13) falló en v0.1.0 y arm64 compiló el mismo código sin problema.
+          - runner: macos-14
             target: x86_64-apple-darwin
     runs-on: ${{ matrix.runner }}
     steps:
