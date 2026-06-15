@@ -98,3 +98,34 @@ async fn auth_check_no_scopes_header_is_empty() {
     let (_user, scopes) = client.auth_check().await.unwrap();
     assert!(scopes.is_empty());
 }
+
+#[tokio::test]
+async fn get_json_uses_etag_and_serves_304_from_cache() {
+    let server = MockServer::start().await;
+    // 1ª llamada: 200 con ETag.
+    Mock::given(method("GET"))
+        .and(path("/user"))
+        .and(header("authorization", "Bearer tok"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("etag", "\"abc123\"")
+                .set_body_json(json!({"login": "cached-user"})),
+        )
+        .up_to_n_times(1)
+        .mount(&server)
+        .await;
+    // 2ª llamada: debe traer If-None-Match con el ETag → respondemos 304 sin cuerpo.
+    Mock::given(method("GET"))
+        .and(path("/user"))
+        .and(header("if-none-match", "\"abc123\""))
+        .respond_with(ResponseTemplate::new(304))
+        .mount(&server)
+        .await;
+
+    let client = GithubClient::new(server.uri(), "tok".into());
+    let first = client.get_user().await.unwrap();
+    assert_eq!(first["login"], "cached-user");
+    // El 304 se sirve desde la caché con el mismo cuerpo.
+    let second = client.get_user().await.unwrap();
+    assert_eq!(second["login"], "cached-user");
+}
