@@ -6,6 +6,11 @@ use serde_json::Value;
 
 impl GithubClient {
     pub async fn fetch_snapshot(&self, owner: &str, name: &str) -> GhResult<RepoSettingsSnapshot> {
+        let cache_key = format!("{owner}/{name}");
+        if let Some(snap) = self.cached_snapshot(&cache_key) {
+            return Ok(snap);
+        }
+
         let repo = self.get_json(&format!("/repos/{owner}/{name}")).await?;
 
         let mut branches = Vec::new();
@@ -80,7 +85,7 @@ impl GithubClient {
 
         let s = |k: &str| repo[k].as_str().map(String::from);
         let f = |k: &str| repo[k].as_bool().unwrap_or(false);
-        Ok(RepoSettingsSnapshot {
+        let snapshot = RepoSettingsSnapshot {
             repo: format!("{owner}/{name}"),
             default_branch: repo["default_branch"].as_str().unwrap_or("main").into(),
             branches,
@@ -106,6 +111,8 @@ impl GithubClient {
             others: OtherSettings { web_commit_signoff_required: f("web_commit_signoff_required") },
             rulesets,
             branch_protections,
-        })
+        };
+        self.store_snapshot(&cache_key, &snapshot);
+        Ok(snapshot)
     }
 }

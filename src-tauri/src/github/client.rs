@@ -3,7 +3,11 @@ use reqwest::{Method, Response, StatusCode};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
+
+/// TTL de la caché de snapshots: dentro de esta ventana, auditar→sincronizar o re-auditar
+/// reutiliza el snapshot en memoria sin volver a llamar a la API.
+const SNAPSHOT_TTL: Duration = Duration::from_secs(60);
 
 #[derive(Debug, thiserror::Error)]
 pub enum GhError {
@@ -32,6 +36,8 @@ pub struct GithubClient {
     // contra el rate limit de GitHub, así que re-auditar repos sin cambios es casi gratis.
     // Arc<Mutex<…>> para compartir la caché entre los clones del cliente (audit clona por repo).
     cache: Arc<Mutex<HashMap<String, CachedResponse>>>,
+    // Caché de snapshots por repo con TTL: evita re-fetchear (round-trips incluidos) lo recién leído.
+    snapshot_cache: Arc<Mutex<HashMap<String, (Instant, crate::model::RepoSettingsSnapshot)>>>,
 }
 
 impl GithubClient {
@@ -46,7 +52,26 @@ impl GithubClient {
             base: base.into(),
             token,
             cache: Arc::new(Mutex::new(HashMap::new())),
+            snapshot_cache: Arc::new(Mutex::new(HashMap::new())),
         }
+    }
+
+    /// Devuelve el snapshot cacheado del repo si sigue fresco (dentro del TTL).
+    pub(crate) fn cached_snapshot(&self, repo: &str) -> Option<crate::model::RepoSettingsSnapshot> {
+        let guard = self.snapshot_cache.lock().unwrap();
+        guard
+            .get(repo)
+            .filter(|(t, _)| t.elapsed() < SNAPSHOT_TTL)
+            .map(|(_, s)| s.clone())
+    }
+
+    pub(crate) fn store_snapshot(&self, repo: &str, snap: &crate::model::RepoSettingsSnapshot) {
+        self.snapshot_cache.lock().unwrap().insert(repo.to_string(), (Instant::now(), snap.clone()));
+    }
+
+    /// Invalida el snapshot cacheado de un repo (tras escribir en él, para no servir estado viejo).
+    pub(crate) fn invalidate_snapshot(&self, owner: &str, name: &str) {
+        self.snapshot_cache.lock().unwrap().remove(&format!("{owner}/{name}"));
     }
 
     pub fn api_base() -> String {
@@ -154,18 +179,22 @@ impl GithubClient {
     }
 
     pub async fn update_repo(&self, owner: &str, name: &str, body: &Value) -> GhResult<Value> {
+        self.invalidate_snapshot(owner, name);
         self.send_json(Method::PATCH, &format!("/repos/{owner}/{name}"), body).await
     }
 
     pub async fn create_ruleset(&self, owner: &str, name: &str, payload: &Value) -> GhResult<Value> {
+        self.invalidate_snapshot(owner, name);
         self.send_json(Method::POST, &format!("/repos/{owner}/{name}/rulesets"), payload).await
     }
 
     pub async fn update_ruleset(&self, owner: &str, name: &str, id: u64, payload: &Value) -> GhResult<Value> {
+        self.invalidate_snapshot(owner, name);
         self.send_json(Method::PUT, &format!("/repos/{owner}/{name}/rulesets/{id}"), payload).await
     }
 
     pub async fn put_branch_protection(&self, owner: &str, name: &str, branch: &str, config: &Value) -> GhResult<Value> {
+        self.invalidate_snapshot(owner, name);
         self.send_json(Method::PUT, &format!("/repos/{owner}/{name}/branches/{branch}/protection"), config).await
     }
 

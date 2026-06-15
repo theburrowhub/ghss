@@ -152,3 +152,37 @@ async fn fetch_snapshot_tolerates_rulesets_403_on_free_private_repo() {
     assert!(snap.rulesets.is_empty(), "los rulesets bloqueados por plan se ignoran");
     assert!(snap.features.has_wiki);
 }
+
+#[tokio::test]
+async fn fetch_snapshot_is_cached_and_invalidated_on_write() {
+    let server = MockServer::start().await;
+    // El GET del repo solo debe ocurrir UNA vez mientras el snapshot esté en caché.
+    Mock::given(method("GET")).and(path("/repos/acme/c"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "full_name": "acme/c", "default_branch": "main",
+            "has_wiki": true, "has_issues": true, "has_projects": false,
+            "has_discussions": false, "allow_forking": false, "web_commit_signoff_required": false,
+            "allow_merge_commit": true, "allow_squash_merge": true, "allow_rebase_merge": true,
+            "allow_update_branch": false, "allow_auto_merge": false, "delete_branch_on_merge": false
+        })))
+        .expect(2) // 1ª carga + 1 recarga tras invalidar por escritura
+        .mount(&server).await;
+    Mock::given(method("GET")).and(path("/repos/acme/c/branches"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([])))
+        .mount(&server).await;
+    Mock::given(method("GET")).and(path("/repos/acme/c/rulesets"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([])))
+        .mount(&server).await;
+    Mock::given(method("PATCH")).and(path("/repos/acme/c"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({})))
+        .mount(&server).await;
+
+    let client = GithubClient::new(server.uri(), "tok".into());
+    let a = client.fetch_snapshot("acme", "c").await.unwrap();
+    let b = client.fetch_snapshot("acme", "c").await.unwrap(); // servido desde caché (sin GET)
+    assert_eq!(a, b);
+    // Escribir invalida la caché → el siguiente fetch vuelve a llamar al repo GET.
+    client.update_repo("acme", "c", &json!({"has_wiki": false})).await.unwrap();
+    let _c = client.fetch_snapshot("acme", "c").await.unwrap();
+    // wiremock verifica al drop que /repos/acme/c se pidió exactamente 2 veces.
+}
