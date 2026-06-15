@@ -119,7 +119,30 @@ impl GithubClient {
                 return Err(GhError::Unauthorized);
             }
             if !status.is_success() {
+                // Rate limit primario agotado (403 con remaining 0, o 429): mensaje claro con el
+                // tiempo de reset en vez del JSON crudo de GitHub.
+                let remaining_zero = resp.headers().get("x-ratelimit-remaining").map(|v| v == "0").unwrap_or(false);
+                let reset_epoch = resp
+                    .headers()
+                    .get("x-ratelimit-reset")
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|v| v.parse::<u64>().ok());
                 let body = resp.text().await.unwrap_or_default();
+                let is_rate_limit = status == StatusCode::TOO_MANY_REQUESTS
+                    || (status == StatusCode::FORBIDDEN && (remaining_zero || body.contains("rate limit")));
+                if is_rate_limit {
+                    let mins = reset_epoch.and_then(|r| {
+                        std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .ok()
+                            .map(|now| r.saturating_sub(now.as_secs()).div_ceil(60))
+                    });
+                    let msg = match mins {
+                        Some(m) => format!("rate limit exceeded; resets in ~{m} min"),
+                        None => "rate limit exceeded".into(),
+                    };
+                    return Err(GhError::Api { status, body: msg });
+                }
                 return Err(GhError::Api { status, body });
             }
             return Ok(resp);

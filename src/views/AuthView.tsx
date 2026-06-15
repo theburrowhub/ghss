@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { authDevicePoll, authDeviceStart, authLoadSaved, authWithGh, authWithPat } from "../api";
+import { friendlyError } from "./StatusBar";
 import type { DeviceStart, UserInfo } from "../types";
 
 type Method = "gh" | "pat" | "device";
@@ -105,7 +106,7 @@ export function AuthView({ onLogin }: { onLogin: (u: UserInfo) => void }) {
           </>
         )}
 
-        {error && <p style={{ color: "var(--danger)" }}>{error}</p>}
+        {error && <p style={{ color: "var(--danger)" }}>{friendlyError(error)}</p>}
       </div>
     </div>
   );

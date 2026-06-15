@@ -13,7 +13,10 @@ export function friendlyError(raw: string): string {
     return "Your GitHub session is invalid or expired. Please reconnect.";
   }
   if (raw.toLowerCase().includes("rate limit")) {
-    return "You've hit GitHub's rate limit. Wait a few minutes and try again.";
+    const m = raw.match(/resets? in ~?(\d+)\s*min/i);
+    return m
+      ? `GitHub rate limit reached — try again in ~${m[1]} min.`
+      : "GitHub rate limit reached. Wait a few minutes and try again.";
   }
   // Pass through gh binary not-found errors as-is (already English from backend).
   if (raw.includes("gh") && raw.includes("not found")) return raw;
