@@ -47,6 +47,8 @@ export interface AuditStartedEvent { total: number; }
 export interface AuditRepoEvent { repo: string; diff: RepoDiff | null; error: string | null; }
 
 export interface TeamInfo { slug: string; name: string; }
+// kind: "user" = authenticated personal account, "org" = organization.
+export interface OwnerInfo { login: string; kind: "user" | "org"; }
 export interface ActionResult { description: string; ok: boolean; error: string | null; }
 export interface RepoSyncResult { repo: string; results: ActionResult[]; fatal: string | null; }
 export interface DeviceStart { device_code: string; user_code: string; verification_uri: string; interval: number; }

@@ -105,6 +105,16 @@ pub async fn list_repos(state: State<'_, AppState>) -> CmdResult<Vec<RepoInfo>> 
 }
 
 #[tauri::command]
+pub async fn list_owners(state: State<'_, AppState>) -> CmdResult<Vec<OwnerInfo>> {
+    client(&state).await?.list_owners().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn list_repos_for_owner(state: State<'_, AppState>, owner: String, is_org: bool) -> CmdResult<Vec<RepoInfo>> {
+    client(&state).await?.list_repos_for_owner(&owner, is_org).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn list_org_teams(state: State<'_, AppState>, org: String) -> CmdResult<Vec<TeamInfo>> {
     match client(&state).await?.list_org_teams(&org).await {
         Ok(teams) => Ok(teams),

@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AuditResult, DeviceStart, RepoInfo, RepoSyncResult, SettingChange, TeamInfo, UserInfo } from "./types";
+import type { AuditResult, DeviceStart, OwnerInfo, RepoInfo, RepoSyncResult, SettingChange, TeamInfo, UserInfo } from "./types";
 
 export const authWithGh = () => invoke<UserInfo>("auth_with_gh");
 export const authWithPat = (pat: string, save: boolean) => invoke<UserInfo>("auth_with_pat", { pat, save });
@@ -9,6 +9,9 @@ export const authDevicePoll = (clientId: string, deviceCode: string) =>
   invoke<UserInfo | null>("auth_device_poll", { clientId, deviceCode });
 export const logout = () => invoke<void>("logout");
 export const listRepos = () => invoke<RepoInfo[]>("list_repos");
+export const listOwners = () => invoke<OwnerInfo[]>("list_owners");
+export const listReposForOwner = (owner: string, isOrg: boolean) =>
+  invoke<RepoInfo[]>("list_repos_for_owner", { owner, isOrg });
 export const listOrgTeams = (org: string) => invoke<TeamInfo[]>("list_org_teams", { org });
 export const listTeamRepos = (org: string, teamSlug: string) =>
   invoke<string[]>("list_team_repos", { org, teamSlug });

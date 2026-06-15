@@ -19,6 +19,16 @@ pub struct TeamInfo {
     pub name: String,
 }
 
+/// An account whose repositories can be listed: the authenticated personal account or an org.
+/// `kind` distinguishes them so the UI can label them and so `list_repos_for_owner` picks the
+/// right endpoint (`/user/repos` for the personal account, `/orgs/{owner}/repos` for an org).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct OwnerInfo {
+    pub login: String,
+    /// "user" for the authenticated personal account, "org" for an organization.
+    pub kind: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct Features {
     pub has_wiki: bool,

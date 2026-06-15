@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { applySync, audit, listOrgTeams, listRepos, listTeamRepos, logout } from "./api";
-import type { AuditRepoEvent, AuditResult, AuditStartedEvent, RepoInfo, RepoSyncResult, SettingChange, TeamInfo, UserInfo } from "./types";
+import { applySync, audit, listOrgTeams, listOwners, listReposForOwner, listTeamRepos, logout } from "./api";
+import type { AuditRepoEvent, AuditResult, AuditStartedEvent, OwnerInfo, RepoInfo, RepoSyncResult, SettingChange, TeamInfo, UserInfo } from "./types";
 import { AuthView } from "./views/AuthView";
 import { ReposView } from "./views/ReposView";
 import { AuditView } from "./views/AuditView";
@@ -14,7 +14,9 @@ type Stage = "auth" | "loading" | "repos" | "audit" | "exec";
 export default function App() {
   const [stage, setStage] = useState<Stage>("auth");
   const [user, setUser] = useState<UserInfo | null>(null);
+  const [owners, setOwners] = useState<OwnerInfo[]>([]);
   const [repos, setRepos] = useState<RepoInfo[]>([]);
+  const [reposBusy, setReposBusy] = useState(false);
   const [reference, setReference] = useState<string | null>(null);
   const [targets, setTargets] = useState<Set<string>>(new Set());
   const [auditResult, setAuditResult] = useState<AuditResult | null>(null);
@@ -34,20 +36,41 @@ export default function App() {
   const [teamBusy, setTeamBusy] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
 
-  // When owner changes: reset team and load teams for that organization.
+  // Classify the error: a 401 (invalid/expired token) ends the session and returns to login.
+  const handleError = useCallback((e: unknown) => {
+    const s = String(e);
+    if (/\b401\b/.test(s) || s.includes("invalid session") || s.includes("unauthenticated")) {
+      setUser(null);
+      setStatus("");
+      setStage("auth");
+    }
+    setError(s);
+  }, []);
+
+  // When owner changes: reset team, load teams, and fetch repos ONLY for that owner.
+  // No repos are downloaded until an owner is picked (avoids the slow full /user/repos sweep).
   useEffect(() => {
     setTeamSlug("(all)");
     setTeamRepos(null);
     if (ownerFilter === "") {
       setTeams([]);
+      setRepos([]);
       return;
     }
     let cancelled = false;
     listOrgTeams(ownerFilter)
       .then((t) => { if (!cancelled) setTeams(t); })
       .catch(() => { if (!cancelled) setTeams([]); });
+
+    const isOrg = owners.find((o) => o.login === ownerFilter)?.kind === "org";
+    setReposBusy(true);
+    setRepos([]);
+    listReposForOwner(ownerFilter, isOrg)
+      .then((list) => { if (!cancelled) setRepos(list); })
+      .catch((e) => { if (!cancelled) { setRepos([]); handleError(e); } })
+      .finally(() => { if (!cancelled) setReposBusy(false); });
     return () => { cancelled = true; };
-  }, [ownerFilter]);
+  }, [ownerFilter, owners, handleError]);
 
   // When a team is chosen: load its repos to filter the list.
   useEffect(() => {
@@ -64,26 +87,17 @@ export default function App() {
     return () => { cancelled = true; };
   }, [ownerFilter, teamSlug]);
 
-  // Classify the error: a 401 (invalid/expired token) ends the session and returns to login.
-  const handleError = useCallback((e: unknown) => {
-    const s = String(e);
-    if (/\b401\b/.test(s) || s.includes("invalid session") || s.includes("unauthenticated")) {
-      setUser(null);
-      setStatus("");
-      setStage("auth");
-    }
-    setError(s);
-  }, []);
-
   const onLogin = useCallback(async (u: UserInfo) => {
     setUser(u);
     setError(null);
     setWarning(u.scope_warning ?? null);
-    setLoading({ title: "Loading repositories…", detail: `Connected as ${u.login}. Fetching the list of accessible repos.` });
+    setOwnerFilter("");
+    setRepos([]);
+    setLoading({ title: "Loading organizations…", detail: `Connected as ${u.login}. Fetching your organizations and personal account.` });
     setStage("loading");
     try {
-      const list = await listRepos();
-      setRepos(list);
+      const list = await listOwners();
+      setOwners(list);
       setStage("repos");
     } catch (e) {
       handleError(e);
@@ -166,6 +180,8 @@ export default function App() {
       {stage === "repos" && (
         <ReposView
           repos={repos}
+          owners={owners}
+          reposBusy={reposBusy}
           reference={reference}
           targets={targets}
           onReference={setReference}

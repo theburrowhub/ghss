@@ -18,6 +18,8 @@ pub fn run() {
             commands::auth_device_poll,
             commands::logout,
             commands::list_repos,
+            commands::list_owners,
+            commands::list_repos_for_owner,
             commands::list_org_teams,
             commands::list_team_repos,
             commands::audit,

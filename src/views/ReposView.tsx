@@ -1,8 +1,10 @@
-import { useEffect, useMemo } from "react";
-import type { RepoInfo, TeamInfo } from "../types";
+import { useEffect } from "react";
+import type { OwnerInfo, RepoInfo, TeamInfo } from "../types";
 
 interface Props {
   repos: RepoInfo[];
+  owners: OwnerInfo[];
+  reposBusy: boolean;
   reference: string | null;
   targets: Set<string>;
   onReference: (repo: string | null) => void;
@@ -26,14 +28,13 @@ interface Props {
 
 export function ReposView(props: Props) {
   const {
-    repos, reference, targets, onReference, onTargets, onAudit, onStatus, busy,
+    repos, owners, reposBusy, reference, targets, onReference, onTargets, onAudit, onStatus, busy,
     search, onSearch, owner, onOwner, teamSlug, onTeamSlug, teams, teamRepos, teamBusy,
     showArchived, onShowArchived,
   } = props;
 
-  const owners = useMemo(() => Array.from(new Set(repos.map((r) => r.owner))).sort(), [repos]);
-  // No listamos nada hasta elegir una organización o cuenta personal: evita operar (y auditar)
-  // sobre cientos de repos de todos los owners a la vez.
+  // Owner list comes from the backend (personal account + orgs), NOT derived from a full repo
+  // download: nothing is fetched until the user picks one here.
   const ownerSelected = owner !== "";
 
   useEffect(() => {
@@ -87,8 +88,13 @@ export function ReposView(props: Props) {
         <input type="text" placeholder="Search repos…" value={search} onChange={(e) => onSearch(e.target.value)} style={{ maxWidth: 320 }} />
         <select value={owner} onChange={(e) => onOwner(e.target.value)}>
           <option value="">Select an organization or account…</option>
-          {owners.map((o) => <option key={o}>{o}</option>)}
+          {owners.map((o) => (
+            <option key={o.login} value={o.login}>
+              {o.login}{o.kind === "user" ? " (personal)" : ""}
+            </option>
+          ))}
         </select>
+        {reposBusy && <span className="spinner spinner-sm" />}
         {ownerSelected && teams.length > 0 && (
           <select value={teamSlug} onChange={(e) => onTeamSlug(e.target.value)} title="Filter by organization team">
             <option value="(all)">All teams</option>
@@ -125,6 +131,10 @@ export function ReposView(props: Props) {
       {!ownerSelected ? (
         <div className="card muted" style={{ marginTop: 14 }}>
           Select an organization or personal account above to list its repositories.
+        </div>
+      ) : reposBusy ? (
+        <div className="card muted" style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 8 }}>
+          <span className="spinner spinner-sm" /> Loading repositories for {owner}…
         </div>
       ) : (
       <>

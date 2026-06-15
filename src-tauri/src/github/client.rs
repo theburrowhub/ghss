@@ -1,4 +1,4 @@
-use crate::model::RepoInfo;
+use crate::model::{OwnerInfo, RepoInfo};
 use reqwest::{Method, Response, StatusCode};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -285,6 +285,20 @@ impl GithubClient {
         Ok(repos)
     }
 
+    /// Maps a single repo JSON object (as returned by /user/repos or /orgs/{org}/repos) to RepoInfo.
+    fn repo_from_json(r: &Value) -> RepoInfo {
+        RepoInfo {
+            full_name: r["full_name"].as_str().unwrap_or_default().into(),
+            owner: r["owner"]["login"].as_str().unwrap_or_default().into(),
+            name: r["name"].as_str().unwrap_or_default().into(),
+            private: r["private"].as_bool().unwrap_or(false),
+            admin: r["permissions"]["admin"].as_bool().unwrap_or(false),
+            archived: r["archived"].as_bool().unwrap_or(false),
+            default_branch: r["default_branch"].as_str().unwrap_or("main").into(),
+            description: r["description"].as_str().map(String::from),
+        }
+    }
+
     pub async fn list_repos(&self) -> GhResult<Vec<RepoInfo>> {
         let mut repos = Vec::new();
         for page in 1.. {
@@ -292,17 +306,59 @@ impl GithubClient {
             let batch: Vec<Value> = serde_json::from_value(self.get_json(&path).await?)
                 .map_err(|e| GhError::Api { status: StatusCode::OK, body: format!("unexpected response from /user/repos: {e}") })?;
             let n = batch.len();
-            for r in batch {
-                repos.push(RepoInfo {
-                    full_name: r["full_name"].as_str().unwrap_or_default().into(),
-                    owner: r["owner"]["login"].as_str().unwrap_or_default().into(),
-                    name: r["name"].as_str().unwrap_or_default().into(),
-                    private: r["private"].as_bool().unwrap_or(false),
-                    admin: r["permissions"]["admin"].as_bool().unwrap_or(false),
-                    archived: r["archived"].as_bool().unwrap_or(false),
-                    default_branch: r["default_branch"].as_str().unwrap_or("main").into(),
-                    description: r["description"].as_str().map(String::from),
-                });
+            for r in &batch {
+                repos.push(Self::repo_from_json(r));
+            }
+            if n < 100 {
+                break;
+            }
+        }
+        Ok(repos)
+    }
+
+    /// Lists the accounts whose repos can be browsed: the authenticated personal account
+    /// (from `/user`) plus the organizations the user belongs to (from `/user/orgs`, paginated).
+    /// This is cheap (a couple of pages) compared to downloading every repo up front.
+    pub async fn list_owners(&self) -> GhResult<Vec<OwnerInfo>> {
+        let user = self.get_json("/user").await?;
+        let mut owners = Vec::new();
+        if let Some(login) = user["login"].as_str() {
+            owners.push(OwnerInfo { login: login.to_string(), kind: "user".into() });
+        }
+        for page in 1.. {
+            let path = format!("/user/orgs?per_page=100&page={page}");
+            let batch: Vec<Value> = serde_json::from_value(self.get_json(&path).await?)
+                .map_err(|e| GhError::Api { status: StatusCode::OK, body: format!("unexpected response from /user/orgs: {e}") })?;
+            let n = batch.len();
+            for o in &batch {
+                if let Some(login) = o["login"].as_str() {
+                    owners.push(OwnerInfo { login: login.to_string(), kind: "org".into() });
+                }
+            }
+            if n < 100 {
+                break;
+            }
+        }
+        Ok(owners)
+    }
+
+    /// Lists repos for a single owner server-side, so login never pulls every repo at once.
+    /// For an organization we hit `/orgs/{owner}/repos`; for the authenticated personal account
+    /// we hit `/user/repos?affiliation=owner` (the `/users/{u}/repos` endpoint omits private repos
+    /// and `permissions`, so it can't be used for the signed-in user).
+    pub async fn list_repos_for_owner(&self, owner: &str, is_org: bool) -> GhResult<Vec<RepoInfo>> {
+        let mut repos = Vec::new();
+        for page in 1.. {
+            let path = if is_org {
+                format!("/orgs/{owner}/repos?per_page=100&page={page}&sort=full_name")
+            } else {
+                format!("/user/repos?per_page=100&page={page}&affiliation=owner&sort=full_name")
+            };
+            let batch: Vec<Value> = serde_json::from_value(self.get_json(&path).await?)
+                .map_err(|e| GhError::Api { status: StatusCode::OK, body: format!("unexpected response from {path}: {e}") })?;
+            let n = batch.len();
+            for r in &batch {
+                repos.push(Self::repo_from_json(r));
             }
             if n < 100 {
                 break;
