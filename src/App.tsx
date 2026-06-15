@@ -27,7 +27,7 @@ export default function App() {
 
   // Repo view filter state: lives here so it persists when navigating to/from audit.
   const [search, setSearch] = useState("");
-  const [ownerFilter, setOwnerFilter] = useState("(all)");
+  const [ownerFilter, setOwnerFilter] = useState(""); // "" = ninguno elegido (no se lista nada)
   const [teamSlug, setTeamSlug] = useState("(all)");
   const [teams, setTeams] = useState<TeamInfo[]>([]);
   const [teamRepos, setTeamRepos] = useState<Set<string> | null>(null); // null = no team filter
@@ -38,7 +38,7 @@ export default function App() {
   useEffect(() => {
     setTeamSlug("(all)");
     setTeamRepos(null);
-    if (ownerFilter === "(all)") {
+    if (ownerFilter === "") {
       setTeams([]);
       return;
     }
@@ -51,7 +51,7 @@ export default function App() {
 
   // When a team is chosen: load its repos to filter the list.
   useEffect(() => {
-    if (ownerFilter === "(all)" || teamSlug === "(all)") {
+    if (ownerFilter === "" || teamSlug === "(all)") {
       setTeamRepos(null);
       return;
     }

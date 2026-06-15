@@ -31,21 +31,24 @@ export function ReposView(props: Props) {
     showArchived, onShowArchived,
   } = props;
 
-  const owners = useMemo(() => ["(all)", ...Array.from(new Set(repos.map((r) => r.owner))).sort()], [repos]);
+  const owners = useMemo(() => Array.from(new Set(repos.map((r) => r.owner))).sort(), [repos]);
+  // No listamos nada hasta elegir una organización o cuenta personal: evita operar (y auditar)
+  // sobre cientos de repos de todos los owners a la vez.
+  const ownerSelected = owner !== "";
 
   useEffect(() => {
     onStatus(`${targets.size} target repos selected · reference: ${reference ?? "none"}`);
   }, [targets, reference, onStatus]);
 
   const matchesFilter = (r: RepoInfo) =>
-    (owner === "(all)" || r.owner === owner) &&
+    r.owner === owner &&
     (teamRepos === null || teamRepos.has(r.full_name)) &&
     (showArchived || !r.archived) &&
     r.full_name.toLowerCase().includes(search.toLowerCase());
 
   const refRepo = repos.find((r) => r.full_name === reference) ?? null;
   // The reference is removed from the common list: shown pinned at the top as "featured".
-  const visible = repos.filter((r) => r.full_name !== reference && matchesFilter(r));
+  const visible = ownerSelected ? repos.filter((r) => r.full_name !== reference && matchesFilter(r)) : [];
   // Archived repos are read-only: they can't be sync targets.
   const selectableVisible = visible.filter((r) => r.admin && !r.archived);
   const selectedVisible = selectableVisible.filter((r) => targets.has(r.full_name)).length;
@@ -83,9 +86,10 @@ export function ReposView(props: Props) {
       <div style={{ display: "flex", gap: 10, marginBottom: 14, alignItems: "center" }}>
         <input type="text" placeholder="Search repos…" value={search} onChange={(e) => onSearch(e.target.value)} style={{ maxWidth: 320 }} />
         <select value={owner} onChange={(e) => onOwner(e.target.value)}>
+          <option value="">Select an organization or account…</option>
           {owners.map((o) => <option key={o}>{o}</option>)}
         </select>
-        {owner !== "(all)" && teams.length > 0 && (
+        {ownerSelected && teams.length > 0 && (
           <select value={teamSlug} onChange={(e) => onTeamSlug(e.target.value)} title="Filter by organization team">
             <option value="(all)">All teams</option>
             {teams.map((t) => <option key={t.slug} value={t.slug}>{t.name}</option>)}
@@ -118,6 +122,12 @@ export function ReposView(props: Props) {
         </div>
       )}
 
+      {!ownerSelected ? (
+        <div className="card muted" style={{ marginTop: 14 }}>
+          Select an organization or personal account above to list its repositories.
+        </div>
+      ) : (
+      <>
       <div className="list-toolbar">
         <button onClick={selectAll} disabled={selectableVisible.length === 0 || allSelected}>
           Select all ({selectableVisible.length})
@@ -156,6 +166,8 @@ export function ReposView(props: Props) {
         ))}
         {visible.length === 0 && <p className="muted" style={{ padding: 16 }}>No results.</p>}
       </div>
+      </>
+      )}
     </div>
   );
 }
