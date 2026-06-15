@@ -1,4 +1,11 @@
-# ghss — GitHub Settings Sync
+<p align="center">
+  <img src="assets/banner.png" alt="ghss — un mapache sincroniza la configuración (Rulesets, Branch protections, GitHub Actions, Repository settings) entre repositorios de GitHub" width="100%" />
+</p>
+
+<h1 align="center">
+  <img src="assets/logo.png" alt="Logo de ghss: mapache con gafas y escudo de git dentro de un óvalo de GitHub" width="96" height="96" valign="middle" />
+  &nbsp;ghss — GitHub Settings Sync
+</h1>
 
 Aplicación de escritorio (macOS / Linux) construida con Tauri 2.x que sincroniza la configuración de GitHub desde un repositorio de referencia hacia uno o varios repositorios destino, con auditoría previa y deselección granular de cada cambio.
 

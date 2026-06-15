@@ -22,12 +22,16 @@ pre { background: var(--bg-inset); border: 1px solid var(--border); border-radiu
 pre code { background: none; border: none; padding: 0; }
 .muted { color: var(--fg-muted); }
 
+.banner { display: block; line-height: 0; border-bottom: 1px solid var(--border); }
+.banner img { display: block; width: 100%; height: auto; }
+
 .hero {
   text-align: center;
-  padding: 80px 0 64px;
+  padding: 56px 0 64px;
   background: radial-gradient(ellipse at top, rgba(47, 129, 247, 0.12), transparent 70%);
   border-bottom: 1px solid var(--border);
 }
+.logo-mark { width: 88px; height: 88px; border-radius: 20px; margin-bottom: 16px; box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4); }
 .logo { font-size: 18px; color: var(--gold); letter-spacing: 0.05em; margin-bottom: 12px; }
 .hero h1 { font-size: 48px; margin: 0 0 16px; letter-spacing: -0.02em; }
 .tagline { font-size: 19px; color: var(--fg-muted); max-width: 620px; margin: 0 auto 28px; }
