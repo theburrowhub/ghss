@@ -69,6 +69,20 @@ pub fn protection_get_to_put(get: &Value) -> Value {
     put
 }
 
+/// Normalizes a webhook's `config` object for stable comparison and re-sending.
+/// Strips the volatile/secret fields that GitHub returns but that should never be
+/// part of the diff: `secret` is never exposed by GitHub (it returns a placeholder
+/// or omits it), and `created_at`/`updated_at`/`last_response` are server state.
+pub fn webhook_get_to_config(get: &Value) -> Value {
+    let mut config = get.get("config").cloned().unwrap_or_else(|| json!({}));
+    if let Some(obj) = config.as_object_mut() {
+        for k in ["secret", "created_at", "updated_at", "last_response"] {
+            obj.remove(k);
+        }
+    }
+    config
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -130,6 +144,32 @@ mod tests {
         assert_eq!(put["restrictions"], json!({"users": ["bob"], "teams": ["core"], "apps": ["ci-app"]}));
         assert_eq!(put["required_linear_history"], json!(true));
         assert_eq!(put["lock_branch"], json!(false));
+    }
+
+    #[test]
+    fn webhook_get_to_config_strips_secret_and_volatile() {
+        let get = json!({
+            "id": 12,
+            "name": "web",
+            "active": true,
+            "events": ["push"],
+            "config": {
+                "url": "https://example.com/hook",
+                "content_type": "json",
+                "insecure_ssl": "0",
+                "secret": "********",
+                "created_at": "2026-01-01",
+                "updated_at": "2026-01-02",
+                "last_response": {"code": 200}
+            }
+        });
+        let config = webhook_get_to_config(&get);
+        assert_eq!(config, json!({
+            "url": "https://example.com/hook",
+            "content_type": "json",
+            "insecure_ssl": "0"
+        }));
+        assert!(config.get("secret").is_none(), "el secret nunca debe incluirse");
     }
 
     #[test]

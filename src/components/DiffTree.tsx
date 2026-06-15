@@ -7,6 +7,15 @@ interface Props {
   selectable: boolean;
   selected: Set<string>;
   onSelectedChange: (next: Set<string>) => void;
+  /** Per-change override of the webhook destination URL, keyed by SettingChange.key. */
+  urlOverrides?: Record<string, string>;
+  onUrlOverride?: (key: string, url: string) => void;
+}
+
+/** Reads the webhook destination URL from a change's desired payload. */
+function webhookUrl(c: SettingChange): string {
+  const desired = c.desired as { config?: { url?: string } } | null;
+  return desired?.config?.url ?? "";
 }
 
 /** Renders a scalar value with a word + color based on its meaning (not its column). */
@@ -33,7 +42,7 @@ function actionFor(c: SettingChange): { text: string; cls: string } {
   return { text: "Will be changed", cls: "change" };
 }
 
-export function DiffTree({ changes, selectable, selected, onSelectedChange }: Props) {
+export function DiffTree({ changes, selectable, selected, onSelectedChange, urlOverrides, onUrlOverride }: Props) {
   const [collapsed, setCollapsed] = useState<Set<Category>>(new Set());
   const byCat = CATEGORY_ORDER.map((cat) => ({ cat, items: changes.filter((c) => c.category === cat) })).filter(
     (g) => g.items.length > 0,
@@ -90,32 +99,46 @@ export function DiffTree({ changes, selectable, selected, onSelectedChange }: Pr
               </span>
             </div>
             {!isCollapsed &&
-              items.map((c) => (
-                <div className={`diff-row${c.applicable ? "" : " na"}`} key={c.key}>
-                  {selectable && (
-                    <input
-                      type="checkbox"
-                      aria-label={c.label}
-                      disabled={!c.applicable}
-                      checked={c.applicable && selected.has(c.key)}
-                      onChange={() => toggle(c.key)}
-                    />
-                  )}
-                  <span style={{ flex: 1 }}>{c.label}</span>
-                  {c.note && <span className="muted">{c.note}</span>}
-                  {isScalar(c.current) && isScalar(c.desired) && !(c.current === null && c.desired === null) && (
-                    <span className="transition">
-                      <ScalarValue v={c.current} />
-                      <span className="arrow">→</span>
-                      <ScalarValue v={c.desired} />
-                    </span>
-                  )}
-                  {(() => {
-                    const a = actionFor(c);
-                    return <span className={`action ${a.cls}`}>{a.text}</span>;
-                  })()}
-                </div>
-              ))}
+              items.map((c) => {
+                const isWebhook = c.key.startsWith("webhook.");
+                return (
+                  <div className={`diff-row${c.applicable ? "" : " na"}`} key={c.key}>
+                    {selectable && (
+                      <input
+                        type="checkbox"
+                        aria-label={c.label}
+                        disabled={!c.applicable}
+                        checked={c.applicable && selected.has(c.key)}
+                        onChange={() => toggle(c.key)}
+                      />
+                    )}
+                    <span style={{ flex: 1 }}>{c.label}</span>
+                    {isWebhook && (
+                      <input
+                        type="text"
+                        className="mono"
+                        aria-label={`Webhook URL for ${c.label}`}
+                        style={{ flex: 2, minWidth: 220 }}
+                        disabled={!c.applicable}
+                        value={urlOverrides?.[c.key] ?? webhookUrl(c)}
+                        onChange={(e) => onUrlOverride?.(c.key, e.target.value)}
+                      />
+                    )}
+                    {c.note && <span className="muted note-warning">{c.note}</span>}
+                    {!isWebhook && isScalar(c.current) && isScalar(c.desired) && !(c.current === null && c.desired === null) && (
+                      <span className="transition">
+                        <ScalarValue v={c.current} />
+                        <span className="arrow">→</span>
+                        <ScalarValue v={c.desired} />
+                      </span>
+                    )}
+                    {(() => {
+                      const a = actionFor(c);
+                      return <span className={`action ${a.cls}`}>{a.text}</span>;
+                    })()}
+                  </div>
+                );
+              })}
           </div>
         );
       })}

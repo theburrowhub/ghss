@@ -16,6 +16,8 @@ export function AuditView({ reference, result, onBack, onSync, onStatus, busy }:
   const [onlyDiverged, setOnlyDiverged] = useState(true);
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Per webhook-change override of the destination URL, keyed by `${repo}::${key}`.
+  const [urlOverrides, setUrlOverrides] = useState<Record<string, string>>({});
   const known = useRef<Set<string>>(new Set());
 
   const streaming = result.streaming === true;
@@ -54,7 +56,20 @@ export function AuditView({ reference, result, onBack, onSync, onStatus, busy }:
   const deselectAll = () => setSelected(new Set());
 
   const plans = diverged
-    .map((d) => ({ repo: d.repo, changes: d.changes.filter((c) => selected.has(`${d.repo}::${c.key}`)) }))
+    .map((d) => ({
+      repo: d.repo,
+      changes: d.changes
+        .filter((c) => selected.has(`${d.repo}::${c.key}`))
+        .map((c) => {
+          // Webhook changes can have their destination URL overridden in the UI. Clone the change
+          // and inject the override into desired.config.url before sending it to the backend.
+          if (!c.key.startsWith("webhook.")) return c;
+          const override = urlOverrides[`${d.repo}::${c.key}`];
+          const desired = c.desired as { config?: Record<string, unknown> } | null;
+          if (override === undefined || !desired?.config) return c;
+          return { ...c, desired: { ...desired, config: { ...desired.config, url: override } } };
+        }),
+    }))
     .filter((p) => p.changes.length > 0);
   const totalChanges = plans.reduce((n, p) => n + p.changes.length, 0);
 
@@ -123,6 +138,14 @@ export function AuditView({ reference, result, onBack, onSync, onStatus, busy }:
                   changes={d.changes}
                   selectable={true}
                   selected={new Set(d.changes.filter((c) => selected.has(`${d.repo}::${c.key}`)).map((c) => c.key))}
+                  urlOverrides={Object.fromEntries(
+                    d.changes
+                      .filter((c) => c.key.startsWith("webhook.") && urlOverrides[`${d.repo}::${c.key}`] !== undefined)
+                      .map((c) => [c.key, urlOverrides[`${d.repo}::${c.key}`]]),
+                  )}
+                  onUrlOverride={(key, url) =>
+                    setUrlOverrides((prev) => ({ ...prev, [`${d.repo}::${key}`]: url }))
+                  }
                   onSelectedChange={(next) =>
                     setSelected((prev) => {
                       const out = new Set(prev);

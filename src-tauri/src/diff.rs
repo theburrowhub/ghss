@@ -112,6 +112,53 @@ pub fn diff_snapshots(reference: &RepoSettingsSnapshot, target: &RepoSettingsSna
         }
     }
 
+    // Webhooks are matched reference<->target by config.url. We never delete webhooks that
+    // exist only in the target. Secrets are never synced (GitHub does not expose them).
+    let webhook_note = "Los secrets no se sincronizan (GitHub no los expone); si el webhook requiere secret, configúralo manualmente.";
+    for wh in &reference.webhooks {
+        let url = wh.config["url"].as_str().unwrap_or_default();
+        let key = format!("webhook.{url}");
+        let desired = json!({
+            "name": wh.name,
+            "active": wh.active,
+            "events": wh.events,
+            "config": wh.config,
+        });
+        match target.webhooks.iter().find(|x| x.config["url"].as_str().unwrap_or_default() == url) {
+            None => ch.push(SettingChange {
+                key,
+                label: format!("Webhook «{url}» (create)"),
+                category: Category::Webhooks,
+                current: Value::Null,
+                desired,
+                applicable: true,
+                note: Some(webhook_note.into()),
+            }),
+            Some(existing)
+                if existing.config != wh.config || existing.events != wh.events || existing.active != wh.active =>
+            {
+                // Store the COMPLETE target webhook (with its id) so plan_actions can PATCH by id.
+                let current = json!({
+                    "id": existing.id,
+                    "name": existing.name,
+                    "active": existing.active,
+                    "events": existing.events,
+                    "config": existing.config,
+                });
+                ch.push(SettingChange {
+                    key,
+                    label: format!("Webhook «{url}» (update)"),
+                    category: Category::Webhooks,
+                    current,
+                    desired,
+                    applicable: true,
+                    note: Some(webhook_note.into()),
+                });
+            }
+            _ => {}
+        }
+    }
+
     RepoDiff { repo: target.repo.clone(), changes: ch }
 }
 
@@ -130,6 +177,7 @@ mod tests {
             others: OtherSettings::default(),
             rulesets: vec![],
             branch_protections: vec![],
+            webhooks: vec![],
         }
     }
 
@@ -212,5 +260,61 @@ mod tests {
         assert_eq!(main.current, serde_json::Value::Null);
         let release = d.changes.iter().find(|c| c.key == "branch_protection.release").unwrap();
         assert!(!release.applicable);
+    }
+
+    fn webhook(url: &str, events: &[&str], active: bool, id: u64) -> WebhookSummary {
+        WebhookSummary {
+            id,
+            name: "web".into(),
+            active,
+            events: events.iter().map(|s| s.to_string()).collect(),
+            config: json!({"url": url, "content_type": "json"}),
+        }
+    }
+
+    #[test]
+    fn webhook_create_when_missing_in_target() {
+        let mut reference = base("a/ref");
+        reference.webhooks = vec![webhook("https://example.com/hook", &["push"], true, 1)];
+        let target = base("a/t1");
+        let d = diff_snapshots(&reference, &target);
+        let c = d.changes.iter().find(|c| c.key == "webhook.https://example.com/hook").unwrap();
+        assert_eq!(c.category, Category::Webhooks);
+        assert!(c.applicable);
+        assert_eq!(c.current, Value::Null);
+        assert_eq!(c.desired["config"]["url"], json!("https://example.com/hook"));
+        assert_eq!(c.note.as_deref(), Some("Los secrets no se sincronizan (GitHub no los expone); si el webhook requiere secret, configúralo manualmente."));
+    }
+
+    #[test]
+    fn webhook_update_when_differs_stores_target_id() {
+        let mut reference = base("a/ref");
+        reference.webhooks = vec![webhook("https://example.com/hook", &["push", "pull_request"], true, 1)];
+        let mut target = base("a/t1");
+        target.webhooks = vec![webhook("https://example.com/hook", &["push"], true, 99)];
+        let d = diff_snapshots(&reference, &target);
+        let c = d.changes.iter().find(|c| c.key == "webhook.https://example.com/hook").unwrap();
+        assert!(c.applicable);
+        assert_eq!(c.current["id"], json!(99), "current debe llevar el id del webhook del target");
+        assert_eq!(c.desired["events"], json!(["push", "pull_request"]));
+    }
+
+    #[test]
+    fn webhook_identical_produces_no_change() {
+        let mut reference = base("a/ref");
+        reference.webhooks = vec![webhook("https://example.com/hook", &["push"], true, 1)];
+        let mut target = base("a/t1");
+        target.webhooks = vec![webhook("https://example.com/hook", &["push"], true, 42)];
+        let d = diff_snapshots(&reference, &target);
+        assert!(d.changes.is_empty(), "webhooks idénticos (por url) no generan cambio");
+    }
+
+    #[test]
+    fn webhook_target_only_is_not_deleted() {
+        let reference = base("a/ref");
+        let mut target = base("a/t1");
+        target.webhooks = vec![webhook("https://only-in-target.com/hook", &["push"], true, 7)];
+        let d = diff_snapshots(&reference, &target);
+        assert!(d.changes.is_empty(), "no se generan borrados de webhooks que solo existen en el target");
     }
 }

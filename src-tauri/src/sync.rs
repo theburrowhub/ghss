@@ -9,6 +9,8 @@ pub enum SyncAction {
     CreateRuleset(Value),
     UpdateRuleset { id: u64, payload: Value },
     PutBranchProtection { branch: String, config: Value },
+    CreateWebhook { config: Value },
+    UpdateWebhook { id: u64, config: Value },
 }
 
 impl SyncAction {
@@ -21,6 +23,8 @@ impl SyncAction {
             SyncAction::CreateRuleset(p) => format!("Create ruleset «{}»", p["name"].as_str().unwrap_or("?")),
             SyncAction::UpdateRuleset { payload, .. } => format!("Update ruleset «{}»", payload["name"].as_str().unwrap_or("?")),
             SyncAction::PutBranchProtection { branch, .. } => format!("Apply branch protection to «{}»", branch),
+            SyncAction::CreateWebhook { config } => format!("Create webhook «{}»", config["config"]["url"].as_str().unwrap_or("?")),
+            SyncAction::UpdateWebhook { config, .. } => format!("Update webhook «{}»", config["config"]["url"].as_str().unwrap_or("?")),
         }
     }
 }
@@ -47,6 +51,12 @@ pub fn plan_actions(changes: &[SettingChange], target: &RepoSettingsSnapshot) ->
             }
         } else if let Some(branch) = c.key.strip_prefix("branch_protection.") {
             actions.push(SyncAction::PutBranchProtection { branch: branch.into(), config: c.desired.clone() });
+        } else if c.key.starts_with("webhook.") {
+            // current is Null on create; otherwise it carries the target webhook (with its id) to PATCH.
+            match c.current["id"].as_u64() {
+                Some(id) => actions.push(SyncAction::UpdateWebhook { id, config: c.desired.clone() }),
+                None => actions.push(SyncAction::CreateWebhook { config: c.desired.clone() }),
+            }
         }
     }
 
@@ -81,6 +91,8 @@ pub async fn apply_actions(
             SyncAction::CreateRuleset(payload) => client.create_ruleset(owner, name, payload).await,
             SyncAction::UpdateRuleset { id, payload } => client.update_ruleset(owner, name, *id, payload).await,
             SyncAction::PutBranchProtection { branch, config } => client.put_branch_protection(owner, name, branch, config).await,
+            SyncAction::CreateWebhook { config } => client.create_webhook(owner, name, config).await,
+            SyncAction::UpdateWebhook { id, config } => client.update_webhook(owner, name, *id, config).await,
         };
         results.push(match outcome {
             Ok(_) => ActionResult { description, ok: true, error: None },
@@ -109,6 +121,7 @@ mod tests {
             others: OtherSettings::default(),
             rulesets: vec![RulesetSummary { id: 77, name: "existing".into(), target: "branch".into(), payload: json!({"name": "existing"}) }],
             branch_protections: vec![],
+            webhooks: vec![],
         }
     }
 
@@ -157,6 +170,37 @@ mod tests {
             }
             other => panic!("expected PutBranchProtection, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn webhook_create_when_current_is_null() {
+        let changes = vec![change(
+            "webhook.https://example.com/hook",
+            Category::Webhooks,
+            json!({"name": "web", "active": true, "events": ["push"], "config": {"url": "https://example.com/hook"}}),
+        )];
+        let actions = plan_actions(&changes, &target_with_ruleset());
+        assert_eq!(actions.len(), 1);
+        match &actions[0] {
+            SyncAction::CreateWebhook { config } => assert_eq!(config["config"]["url"], json!("https://example.com/hook")),
+            other => panic!("expected CreateWebhook, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn webhook_update_extracts_id_from_current() {
+        let c = SettingChange {
+            key: "webhook.https://example.com/hook".into(),
+            label: "x".into(),
+            category: Category::Webhooks,
+            current: json!({"id": 55, "name": "web", "active": true, "events": ["push"], "config": {"url": "https://example.com/hook"}}),
+            desired: json!({"name": "web", "active": true, "events": ["push", "pull_request"], "config": {"url": "https://example.com/hook"}}),
+            applicable: true,
+            note: None,
+        };
+        let actions = plan_actions(&[c], &target_with_ruleset());
+        assert_eq!(actions.len(), 1);
+        assert!(matches!(&actions[0], SyncAction::UpdateWebhook { id: 55, .. }));
     }
 
     #[test]

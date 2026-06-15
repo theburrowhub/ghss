@@ -1,4 +1,4 @@
-export type Category = "default_branch" | "features" | "pull_requests" | "others" | "tags" | "rules";
+export type Category = "default_branch" | "features" | "pull_requests" | "others" | "tags" | "rules" | "webhooks";
 
 export interface UserInfo { login: string; avatar_url: string; scope_warning: string | null; }
 
@@ -21,6 +21,14 @@ export interface SettingChange {
   desired: unknown;
   applicable: boolean;
   note: string | null;
+}
+
+export interface WebhookSummary {
+  id: number;
+  name: string;
+  active: boolean;
+  events: string[];
+  config: { url?: string; [k: string]: unknown };
 }
 
 export interface RepoDiff { repo: string; changes: SettingChange[]; }
@@ -50,6 +58,7 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   others: "Others",
   tags: "Tags",
   rules: "Rules",
+  webhooks: "Webhooks",
 };
 
-export const CATEGORY_ORDER: Category[] = ["default_branch", "features", "pull_requests", "others", "tags", "rules"];
+export const CATEGORY_ORDER: Category[] = ["default_branch", "features", "pull_requests", "others", "tags", "rules", "webhooks"];

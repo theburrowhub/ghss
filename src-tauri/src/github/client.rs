@@ -221,6 +221,31 @@ impl GithubClient {
         self.send_json(Method::PUT, &format!("/repos/{owner}/{name}/branches/{branch}/protection"), config).await
     }
 
+    /// Creates a webhook. `desired` is the diff payload {name, active, events, config}; we forward
+    /// exactly those fields to POST /repos/{owner}/{name}/hooks per the GitHub API.
+    pub async fn create_webhook(&self, owner: &str, name: &str, desired: &Value) -> GhResult<Value> {
+        self.invalidate_snapshot(owner, name);
+        let body = serde_json::json!({
+            "name": desired["name"].as_str().unwrap_or("web"),
+            "active": desired["active"].as_bool().unwrap_or(true),
+            "events": desired.get("events").cloned().unwrap_or_else(|| serde_json::json!(["push"])),
+            "config": desired.get("config").cloned().unwrap_or_else(|| serde_json::json!({})),
+        });
+        self.send_json(Method::POST, &format!("/repos/{owner}/{name}/hooks"), &body).await
+    }
+
+    /// Updates a webhook by id. PATCH accepts `active`, `events` and `config`; `name` is immutable
+    /// after creation, so we do not send it.
+    pub async fn update_webhook(&self, owner: &str, name: &str, id: u64, desired: &Value) -> GhResult<Value> {
+        self.invalidate_snapshot(owner, name);
+        let body = serde_json::json!({
+            "active": desired["active"].as_bool().unwrap_or(true),
+            "events": desired.get("events").cloned().unwrap_or_else(|| serde_json::json!(["push"])),
+            "config": desired.get("config").cloned().unwrap_or_else(|| serde_json::json!({})),
+        });
+        self.send_json(Method::PATCH, &format!("/repos/{owner}/{name}/hooks/{id}"), &body).await
+    }
+
     pub async fn list_org_teams(&self, org: &str) -> GhResult<Vec<crate::model::TeamInfo>> {
         let mut teams = Vec::new();
         for page in 1.. {

@@ -44,6 +44,15 @@ async fn mount_repo_fixture(server: &MockServer) {
             "allow_deletions": {"enabled": false}
         })))
         .mount(server).await;
+    Mock::given(method("GET")).and(path("/repos/acme/ref/hooks"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+            {
+                "id": 12, "name": "web", "active": true, "events": ["push", "pull_request"],
+                "config": {"url": "https://example.com/hook", "content_type": "json", "secret": "********"},
+                "created_at": "2026-01-01", "updated_at": "2026-01-01"
+            }
+        ])))
+        .mount(server).await;
 }
 
 #[tokio::test]
@@ -65,6 +74,12 @@ async fn fetch_snapshot_combines_all_sources() {
     assert!(snap.rulesets[0].payload.get("id").is_none(), "el payload debe estar normalizado");
     assert_eq!(snap.branch_protections.len(), 1);
     assert_eq!(snap.branch_protections[0].config["enforce_admins"], json!(true));
+    assert_eq!(snap.webhooks.len(), 1);
+    assert_eq!(snap.webhooks[0].id, 12);
+    assert_eq!(snap.webhooks[0].config["url"], json!("https://example.com/hook"));
+    assert_eq!(snap.webhooks[0].events, vec!["push".to_string(), "pull_request".to_string()]);
+    assert!(snap.webhooks[0].config.get("secret").is_none(), "el secret nunca debe capturarse");
+    assert!(snap.webhooks[0].config.get("created_at").is_none(), "campos volátiles excluidos");
 }
 
 #[tokio::test]
@@ -113,12 +128,24 @@ async fn write_methods_hit_expected_endpoints() {
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({})))
         .expect(1)
         .mount(&server).await;
+    Mock::given(method("POST")).and(path("/repos/acme/t1/hooks"))
+        .and(body_json(json!({"name": "web", "active": true, "events": ["push"], "config": {"url": "https://example.com/hook"}})))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({"id": 30})))
+        .expect(1)
+        .mount(&server).await;
+    Mock::given(method("PATCH")).and(path("/repos/acme/t1/hooks/30"))
+        .and(body_json(json!({"active": false, "events": ["push", "pull_request"], "config": {"url": "https://example.com/hook"}})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"id": 30})))
+        .expect(1)
+        .mount(&server).await;
 
     let client = GithubClient::new(server.uri(), "tok".into());
     client.update_repo("acme", "t1", &json!({"has_wiki": true})).await.unwrap();
     client.create_ruleset("acme", "t1", &json!({"name": "r"})).await.unwrap();
     client.update_ruleset("acme", "t1", 9, &json!({"name": "r"})).await.unwrap();
     client.put_branch_protection("acme", "t1", "main", &json!({"enforce_admins": true})).await.unwrap();
+    client.create_webhook("acme", "t1", &json!({"name": "web", "active": true, "events": ["push"], "config": {"url": "https://example.com/hook"}})).await.unwrap();
+    client.update_webhook("acme", "t1", 30, &json!({"name": "web", "active": false, "events": ["push", "pull_request"], "config": {"url": "https://example.com/hook"}})).await.unwrap();
 }
 
 #[tokio::test]
@@ -185,4 +212,39 @@ async fn fetch_snapshot_is_cached_and_invalidated_on_write() {
     client.update_repo("acme", "c", &json!({"has_wiki": false})).await.unwrap();
     let _c = client.fetch_snapshot("acme", "c").await.unwrap();
     // wiremock verifica al drop que /repos/acme/c se pidió exactamente 2 veces.
+}
+
+#[tokio::test]
+async fn webhook_write_invalidates_snapshot_cache() {
+    let server = MockServer::start().await;
+    // El GET del repo solo debe ocurrir 2 veces: carga inicial + recarga tras crear el webhook.
+    Mock::given(method("GET")).and(path("/repos/acme/w"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "full_name": "acme/w", "default_branch": "main",
+            "has_wiki": true, "has_issues": true, "has_projects": false,
+            "has_discussions": false, "allow_forking": false, "web_commit_signoff_required": false,
+            "allow_merge_commit": true, "allow_squash_merge": true, "allow_rebase_merge": true,
+            "allow_update_branch": false, "allow_auto_merge": false, "delete_branch_on_merge": false
+        })))
+        .expect(2)
+        .mount(&server).await;
+    Mock::given(method("GET")).and(path("/repos/acme/w/branches"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([])))
+        .mount(&server).await;
+    Mock::given(method("GET")).and(path("/repos/acme/w/rulesets"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([])))
+        .mount(&server).await;
+    Mock::given(method("GET")).and(path("/repos/acme/w/hooks"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([])))
+        .mount(&server).await;
+    Mock::given(method("POST")).and(path("/repos/acme/w/hooks"))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({"id": 1})))
+        .mount(&server).await;
+
+    let client = GithubClient::new(server.uri(), "tok".into());
+    let a = client.fetch_snapshot("acme", "w").await.unwrap();
+    let b = client.fetch_snapshot("acme", "w").await.unwrap(); // desde caché
+    assert_eq!(a, b);
+    client.create_webhook("acme", "w", &json!({"name": "web", "active": true, "events": ["push"], "config": {"url": "https://example.com/h"}})).await.unwrap();
+    let _c = client.fetch_snapshot("acme", "w").await.unwrap(); // recarga: GET repo otra vez
 }

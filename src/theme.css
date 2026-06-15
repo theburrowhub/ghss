@@ -108,3 +108,6 @@ input[type="text"], input[type="password"] {
 .action.create { color: var(--success); background: rgba(63, 185, 80, 0.15); }
 .action.update { color: var(--accent); background: rgba(47, 129, 247, 0.15); }
 .action.change { color: var(--accent); background: rgba(47, 129, 247, 0.15); }
+
+/* Visible warning for webhook secrets not being synced. */
+.note-warning { color: var(--warning); font-size: 12px; }

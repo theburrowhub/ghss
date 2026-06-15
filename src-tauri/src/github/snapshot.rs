@@ -1,5 +1,5 @@
 use super::client::{GhError, GhResult, GithubClient};
-use super::transform::{normalize_ruleset, protection_get_to_put};
+use super::transform::{normalize_ruleset, protection_get_to_put, webhook_get_to_config};
 use crate::model::*;
 use reqwest::StatusCode;
 use serde_json::Value;
@@ -83,6 +83,34 @@ impl GithubClient {
             }
         }
 
+        // Webhooks may be unavailable (no admin access, or org policy): GitHub responds 403/404.
+        // Like branch protection, we silently ignore it instead of breaking the snapshot.
+        let mut webhooks = Vec::new();
+        'webhooks: for page in 1.. {
+            let path = format!("/repos/{owner}/{name}/hooks?per_page=100&page={page}");
+            let raw = match self.get_json(&path).await {
+                Ok(v) => v,
+                Err(e) if feature_unavailable(&e) => break 'webhooks,
+                Err(e) => return Err(e),
+            };
+            let batch: Vec<Value> = serde_json::from_value(raw)
+                .map_err(|e| GhError::Api { status: StatusCode::OK, body: format!("unexpected response from {path}: {e}") })?;
+            let n = batch.len();
+            for h in &batch {
+                let Some(id) = h["id"].as_u64() else { continue };
+                webhooks.push(WebhookSummary {
+                    id,
+                    name: h["name"].as_str().unwrap_or("web").into(),
+                    active: h["active"].as_bool().unwrap_or(false),
+                    events: h["events"].as_array().map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default(),
+                    config: webhook_get_to_config(h),
+                });
+            }
+            if n < 100 {
+                break;
+            }
+        }
+
         let s = |k: &str| repo[k].as_str().map(String::from);
         let f = |k: &str| repo[k].as_bool().unwrap_or(false);
         let snapshot = RepoSettingsSnapshot {
@@ -111,6 +139,7 @@ impl GithubClient {
             others: OtherSettings { web_commit_signoff_required: f("web_commit_signoff_required") },
             rulesets,
             branch_protections,
+            webhooks,
         };
         self.store_snapshot(&cache_key, &snapshot);
         Ok(snapshot)

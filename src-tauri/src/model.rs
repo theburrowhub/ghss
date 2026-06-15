@@ -62,6 +62,15 @@ pub struct BranchProtection {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WebhookSummary {
+    pub id: u64,
+    pub name: String,
+    pub active: bool,
+    pub events: Vec<String>,
+    pub config: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct RepoSettingsSnapshot {
     pub repo: String,
     pub default_branch: String,
@@ -71,6 +80,7 @@ pub struct RepoSettingsSnapshot {
     pub others: OtherSettings,
     pub rulesets: Vec<RulesetSummary>,
     pub branch_protections: Vec<BranchProtection>,
+    pub webhooks: Vec<WebhookSummary>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -82,6 +92,7 @@ pub enum Category {
     Others,
     Tags,
     Rules,
+    Webhooks,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -127,6 +138,7 @@ mod tests {
             others: OtherSettings { web_commit_signoff_required: false },
             rulesets: vec![RulesetSummary { id: 1, name: "protect-main".into(), target: "branch".into(), payload: serde_json::json!({"name": "protect-main"}) }],
             branch_protections: vec![BranchProtection { branch: "main".into(), config: serde_json::json!({"enforce_admins": true}) }],
+            webhooks: vec![WebhookSummary { id: 1, name: "web".into(), active: true, events: vec!["push".into()], config: serde_json::json!({"url": "https://example.com/hook", "content_type": "json"}) }],
         };
         let s = serde_json::to_string(&snap).unwrap();
         let back: RepoSettingsSnapshot = serde_json::from_str(&s).unwrap();
