@@ -1,6 +1,6 @@
 [package]
 name = "ghss"
-version = "0.2.0"
+version = "0.3.0"
 description = "GitHub Settings Sync — desktop app"
 authors = ["jamuriano"]
 edition = "2021"
