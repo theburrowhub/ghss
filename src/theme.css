@@ -59,8 +59,25 @@ input[type="text"], input[type="password"] {
 .spinner-sm { width: 14px; height: 14px; border-width: 2px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .loading-card { display: flex; align-items: center; gap: 16px; min-width: 360px; }
-.progress-bar { height: 4px; background: var(--bg-inset); border-radius: 999px; overflow: hidden; }
-.progress-fill { height: 100%; background: var(--accent); border-radius: 999px; transition: width 0.3s ease; }
+.progress-bar { height: 6px; background: var(--bg-inset); border-radius: 999px; overflow: hidden; }
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #1f6feb, var(--accent) 55%, #58a6ff);
+  border-radius: 999px;
+  box-shadow: 0 0 8px rgba(47, 129, 247, 0.45);
+  transition: width 0.35s ease;
+  position: relative;
+  overflow: hidden;
+}
+/* Subtle sheen while a determinate operation is still running. */
+.progress-fill.active::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22), transparent);
+  animation: shimmer 1.4s linear infinite;
+}
+@keyframes shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
 
 .badge { border-radius: 999px; padding: 1px 10px; font-size: 12px; border: 1px solid var(--border); }
 .badge.ok { color: var(--success); border-color: var(--success); }

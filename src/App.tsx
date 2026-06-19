@@ -21,6 +21,7 @@ export default function App() {
   const [targets, setTargets] = useState<Set<string>>(new Set());
   const [auditResult, setAuditResult] = useState<AuditResult | null>(null);
   const [syncResults, setSyncResults] = useState<RepoSyncResult[] | null>(null);
+  const [syncTotal, setSyncTotal] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
@@ -141,6 +142,7 @@ export default function App() {
     setBusy(true);
     setError(null);
     setSyncResults(null);
+    setSyncTotal(plans.length);
     setStage("exec");
     try {
       setSyncResults(await applySync(plans));
@@ -215,6 +217,7 @@ export default function App() {
       {stage === "exec" && (
         <ExecutionView
           results={syncResults}
+          totalRepos={syncTotal}
           onDone={async () => { setSyncResults(null); setAuditResult(null); setStage("repos"); }}
         />
       )}
