@@ -1,7 +1,7 @@
 use crate::github::GithubClient;
 use crate::model::*;
 use serde::Serialize;
-use serde_json::{Map, Value};
+use serde_json::{json, Map, Value};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SyncAction {
@@ -60,10 +60,43 @@ pub fn plan_actions(changes: &[SettingChange], target: &RepoSettingsSnapshot) ->
         }
     }
 
+    // GitHub validates `squash_merge_commit_title` and `squash_merge_commit_message` as a pair:
+    // the title is required when the message is present, and a lone/half-applied field is
+    // rejected with `Validation Failed`. If the user selected only one of the two, fill the
+    // missing partner so the patch is a complete, valid pair. We prefer the reference value
+    // (from the corresponding change's `desired`, if it exists) and fall back to the target's
+    // current value so we never downgrade an unrelated setting.
+    ensure_squash_commit_pair(&mut patch, changes, target);
+
     if !patch.is_empty() {
         actions.insert(0, SyncAction::PatchRepo(Value::Object(patch)));
     }
     actions
+}
+
+/// Ensures `squash_merge_commit_title` and `squash_merge_commit_message` are sent together.
+fn ensure_squash_commit_pair(patch: &mut Map<String, Value>, changes: &[SettingChange], target: &RepoSettingsSnapshot) {
+    const TITLE: &str = "squash_merge_commit_title";
+    const MESSAGE: &str = "squash_merge_commit_message";
+    let has_title = patch.contains_key(TITLE);
+    let has_message = patch.contains_key(MESSAGE);
+    if has_title == has_message {
+        return; // both present (valid pair) or neither (nothing to do)
+    }
+    let missing = if has_title { MESSAGE } else { TITLE };
+    // Reference value the user would have chosen, if that field also changed but wasn't applicable;
+    // otherwise the target's current value (no change for that field).
+    let desired = changes
+        .iter()
+        .find(|c| c.key == format!("pull_requests.{missing}"))
+        .map(|c| c.desired.clone())
+        .unwrap_or_else(|| match missing {
+            TITLE => json!(target.pull_requests.squash_merge_commit_title),
+            _ => json!(target.pull_requests.squash_merge_commit_message),
+        });
+    if !desired.is_null() {
+        patch.insert(missing.into(), desired);
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -201,6 +234,85 @@ mod tests {
         let actions = plan_actions(&[c], &target_with_ruleset());
         assert_eq!(actions.len(), 1);
         assert!(matches!(&actions[0], SyncAction::UpdateWebhook { id: 55, .. }));
+    }
+
+    #[test]
+    fn squash_title_alone_pulls_message_from_target() {
+        // User selects only the squash title. GitHub rejects a lone title, so the patch must
+        // also carry a valid message; here it comes from the target's current value.
+        let mut target = target_with_ruleset();
+        target.pull_requests.squash_merge_commit_message = Some("COMMIT_MESSAGES".into());
+        let changes = vec![change("pull_requests.squash_merge_commit_title", Category::PullRequests, json!("PR_TITLE"))];
+        let actions = plan_actions(&changes, &target);
+        assert_eq!(actions.len(), 1);
+        match &actions[0] {
+            SyncAction::PatchRepo(body) => {
+                assert_eq!(body["squash_merge_commit_title"], json!("PR_TITLE"));
+                assert_eq!(body["squash_merge_commit_message"], json!("COMMIT_MESSAGES"), "the missing message must be filled to form a valid pair");
+            }
+            other => panic!("expected PatchRepo, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn squash_message_alone_pulls_title_from_reference_change() {
+        // The title also differs but is non-applicable (so not in the patch loop); its desired
+        // value still lives in the change set and must be used to complete the pair.
+        let target = target_with_ruleset();
+        let changes = vec![
+            change("pull_requests.squash_merge_commit_message", Category::PullRequests, json!("PR_BODY")),
+            SettingChange {
+                key: "pull_requests.squash_merge_commit_title".into(),
+                label: "x".into(),
+                category: Category::PullRequests,
+                current: Value::Null,
+                desired: json!("COMMIT_OR_PR_TITLE"),
+                applicable: false,
+                note: None,
+            },
+        ];
+        let actions = plan_actions(&changes, &target);
+        assert_eq!(actions.len(), 1);
+        match &actions[0] {
+            SyncAction::PatchRepo(body) => {
+                assert_eq!(body["squash_merge_commit_message"], json!("PR_BODY"));
+                assert_eq!(body["squash_merge_commit_title"], json!("COMMIT_OR_PR_TITLE"), "the title from the reference change completes the pair");
+            }
+            other => panic!("expected PatchRepo, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn squash_pair_already_complete_is_untouched() {
+        let target = target_with_ruleset();
+        let changes = vec![
+            change("pull_requests.squash_merge_commit_title", Category::PullRequests, json!("PR_TITLE")),
+            change("pull_requests.squash_merge_commit_message", Category::PullRequests, json!("PR_BODY")),
+        ];
+        let actions = plan_actions(&changes, &target);
+        match &actions[0] {
+            SyncAction::PatchRepo(body) => {
+                assert_eq!(body["squash_merge_commit_title"], json!("PR_TITLE"));
+                assert_eq!(body["squash_merge_commit_message"], json!("PR_BODY"));
+            }
+            other => panic!("expected PatchRepo, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn squash_title_alone_with_no_message_anywhere_is_not_forced() {
+        // If neither a reference change nor a target value provides the partner, we don't invent
+        // a null; the title is still sent (GitHub accepts a title with a server-default message).
+        let target = target_with_ruleset(); // squash_merge_commit_message = None
+        let changes = vec![change("pull_requests.squash_merge_commit_title", Category::PullRequests, json!("PR_TITLE"))];
+        let actions = plan_actions(&changes, &target);
+        match &actions[0] {
+            SyncAction::PatchRepo(body) => {
+                assert_eq!(body["squash_merge_commit_title"], json!("PR_TITLE"));
+                assert!(body.get("squash_merge_commit_message").is_none(), "no null partner is injected when none is available");
+            }
+            other => panic!("expected PatchRepo, got {:?}", other),
+        }
     }
 
     #[test]

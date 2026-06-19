@@ -1,10 +1,29 @@
 use serde_json::{json, Value};
 
+/// Rule `type`s that the GET ruleset endpoint can return but that the create/update
+/// (POST/PUT) endpoint does NOT accept in its `rules` schema. Sending one of these makes
+/// GitHub reject the whole payload with a 422 `Invalid property /rules/N: data matches no
+/// possible input`. `copilot_code_review` is a preview rule surfaced on read but not yet
+/// validated on write, so we drop it from the write payload (and from the diff, since both
+/// reference and target normalize the same way it never produces a spurious change).
+const WRITE_UNSUPPORTED_RULE_TYPES: &[&str] = &["copilot_code_review"];
+
 /// Strips server-side fields from a ruleset so it can be compared and re-sent in POST/PUT.
+/// Also drops rule types that the write endpoint rejects (see WRITE_UNSUPPORTED_RULE_TYPES):
+/// the GET response includes read-only/preview rule types that, when echoed back to
+/// POST/PUT, fail validation with `/rules/N: data matches no possible input`.
 pub fn normalize_ruleset(mut v: Value) -> Value {
     if let Some(obj) = v.as_object_mut() {
         for k in ["id", "node_id", "source", "source_type", "created_at", "updated_at", "_links", "current_user_can_bypass"] {
             obj.remove(k);
+        }
+        if let Some(rules) = obj.get_mut("rules").and_then(Value::as_array_mut) {
+            rules.retain(|rule| {
+                rule.get("type")
+                    .and_then(Value::as_str)
+                    .map(|t| !WRITE_UNSUPPORTED_RULE_TYPES.contains(&t))
+                    .unwrap_or(true)
+            });
         }
     }
     v
@@ -104,6 +123,73 @@ mod tests {
             "bypass_actors": [], "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}},
             "rules": [{"type": "deletion"}]
         }));
+    }
+
+    #[test]
+    fn normalize_ruleset_drops_write_unsupported_rule_at_index_3() {
+        // Real-world payload from GET /repos/{o}/{n}/rulesets/{id}: the 4th rule (index 3)
+        // is `copilot_code_review`, which the write endpoint rejects with
+        // `Invalid property /rules/3: data matches no possible input`.
+        let raw = json!({
+            "id": 9350827,
+            "node_id": "RRS_x",
+            "source": "freepik-company/ai-integration-wizard",
+            "source_type": "Repository",
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-02T00:00:00Z",
+            "_links": {"self": {"href": "https://api.github.com/..."}},
+            "current_user_can_bypass": "always",
+            "name": "main",
+            "target": "branch",
+            "enforcement": "active",
+            "bypass_actors": [],
+            "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}},
+            "rules": [
+                {"type": "deletion"},
+                {"type": "non_fast_forward"},
+                {"type": "pull_request", "parameters": {
+                    "allowed_merge_methods": ["squash"],
+                    "dismiss_stale_reviews_on_push": false,
+                    "require_code_owner_review": false,
+                    "require_last_push_approval": false,
+                    "required_approving_review_count": 1,
+                    "required_review_thread_resolution": true,
+                    "required_reviewers": []
+                }},
+                {"type": "copilot_code_review"}
+            ]
+        });
+        let n = normalize_ruleset(raw);
+        // Read-only top-level fields are gone.
+        for k in ["id", "node_id", "source", "source_type", "created_at", "updated_at", "_links", "current_user_can_bypass"] {
+            assert!(n.get(k).is_none(), "{k} must be stripped from the write payload");
+        }
+        // Only the keys the write endpoint accepts remain.
+        let keys: Vec<&str> = n.as_object().unwrap().keys().map(String::as_str).collect();
+        let mut keys_sorted = keys.clone();
+        keys_sorted.sort_unstable();
+        assert_eq!(keys_sorted, vec!["bypass_actors", "conditions", "enforcement", "name", "rules", "target"]);
+        // The write-unsupported rule (copilot_code_review) at index 3 is dropped; the other
+        // three are preserved in order.
+        let rules = n["rules"].as_array().unwrap();
+        let types: Vec<&str> = rules.iter().filter_map(|r| r["type"].as_str()).collect();
+        assert_eq!(types, vec!["deletion", "non_fast_forward", "pull_request"]);
+        assert!(!types.contains(&"copilot_code_review"), "copilot_code_review must be removed");
+    }
+
+    #[test]
+    fn normalize_ruleset_keeps_all_supported_rules() {
+        let raw = json!({
+            "name": "main", "target": "branch", "enforcement": "active",
+            "rules": [
+                {"type": "deletion"},
+                {"type": "non_fast_forward"},
+                {"type": "required_status_checks", "parameters": {"required_status_checks": [], "strict_required_status_checks_policy": false}},
+                {"type": "pull_request", "parameters": {"required_approving_review_count": 1}}
+            ]
+        });
+        let n = normalize_ruleset(raw.clone());
+        assert_eq!(n["rules"].as_array().unwrap().len(), 4, "no supported rule should be dropped");
     }
 
     #[test]
