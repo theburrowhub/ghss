@@ -17,6 +17,7 @@ interface Props {
   onSearch: (s: string) => void;
   owner: string;
   onOwner: (o: string) => void;
+  onRefresh: () => void;
   teamSlug: string;
   onTeamSlug: (s: string) => void;
   teams: TeamInfo[];
@@ -29,7 +30,7 @@ interface Props {
 export function ReposView(props: Props) {
   const {
     repos, owners, reposBusy, reference, targets, onReference, onTargets, onAudit, onStatus, busy,
-    search, onSearch, owner, onOwner, teamSlug, onTeamSlug, teams, teamRepos, teamBusy,
+    search, onSearch, owner, onOwner, onRefresh, teamSlug, onTeamSlug, teams, teamRepos, teamBusy,
     showArchived, onShowArchived,
   } = props;
 
@@ -94,6 +95,13 @@ export function ReposView(props: Props) {
             </option>
           ))}
         </select>
+        <button
+          title="Refresh: purge the cache and re-fetch this owner's repos (use it if a newly created repo is missing)"
+          disabled={!ownerSelected || reposBusy}
+          onClick={onRefresh}
+        >
+          {reposBusy ? "Refreshing…" : "↻ Refresh"}
+        </button>
         {reposBusy && <span className="spinner spinner-sm" />}
         {ownerSelected && teams.length > 0 && (
           <select value={teamSlug} onChange={(e) => onTeamSlug(e.target.value)} title="Filter by organization team">

@@ -64,7 +64,7 @@ async fn list_owners_returns_personal_account_and_orgs() {
         .mount(&server).await;
 
     let client = GithubClient::new(server.uri(), "tok".into());
-    let owners = client.list_owners().await.unwrap();
+    let owners = client.list_owners(false).await.unwrap();
     assert_eq!(owners.len(), 3);
     assert_eq!(owners[0].login, "jamuriano");
     assert_eq!(owners[0].kind, "user");
@@ -87,7 +87,7 @@ async fn list_repos_for_org_hits_org_endpoint() {
         .mount(&server).await;
 
     let client = GithubClient::new(server.uri(), "tok".into());
-    let repos = client.list_repos_for_owner("acme", true).await.unwrap();
+    let repos = client.list_repos_for_owner("acme", true, false).await.unwrap();
     assert_eq!(repos.len(), 1);
     assert_eq!(repos[0].full_name, "acme/api");
     assert_eq!(repos[0].owner, "acme");
@@ -110,7 +110,7 @@ async fn list_repos_for_personal_account_uses_user_repos_with_owner_affiliation(
         .mount(&server).await;
 
     let client = GithubClient::new(server.uri(), "tok".into());
-    let repos = client.list_repos_for_owner("jamuriano", false).await.unwrap();
+    let repos = client.list_repos_for_owner("jamuriano", false, false).await.unwrap();
     assert_eq!(repos.len(), 1);
     assert_eq!(repos[0].full_name, "jamuriano/solo");
     assert_eq!(repos[0].owner, "jamuriano");

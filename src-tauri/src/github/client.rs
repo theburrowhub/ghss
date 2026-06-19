@@ -151,8 +151,25 @@ impl GithubClient {
     }
 
     pub(crate) async fn get_json(&self, path: &str) -> GhResult<Value> {
+        self.get_json_inner(path, false).await
+    }
+
+    /// Conditional `get_json` when `force` is false; when true it bypasses the conditional request:
+    /// no `If-None-Match` is sent, so GitHub always returns a fresh 200 (never a 304 served from the
+    /// stale cache) and the cache entry is overwritten with the new body/ETag. Used by the "Refresh"
+    /// action so a repo created after the list was first cached actually shows up.
+    pub(crate) async fn get_json_maybe_forced(&self, path: &str, force: bool) -> GhResult<Value> {
+        self.get_json_inner(path, force).await
+    }
+
+    async fn get_json_inner(&self, path: &str, force: bool) -> GhResult<Value> {
         let key = format!("{}{}", self.base, path);
-        let etag = self.cache.lock().unwrap().get(&key).map(|c| c.etag.clone());
+        // When forcing a refresh we skip the ETag so the request is unconditional (a true 200).
+        let etag = if force {
+            None
+        } else {
+            self.cache.lock().unwrap().get(&key).map(|c| c.etag.clone())
+        };
 
         let resp = self.send(Method::GET, path, None, etag.as_deref()).await?;
 
@@ -319,15 +336,15 @@ impl GithubClient {
     /// Lists the accounts whose repos can be browsed: the authenticated personal account
     /// (from `/user`) plus the organizations the user belongs to (from `/user/orgs`, paginated).
     /// This is cheap (a couple of pages) compared to downloading every repo up front.
-    pub async fn list_owners(&self) -> GhResult<Vec<OwnerInfo>> {
-        let user = self.get_json("/user").await?;
+    pub async fn list_owners(&self, force: bool) -> GhResult<Vec<OwnerInfo>> {
+        let user = self.get_json_maybe_forced("/user", force).await?;
         let mut owners = Vec::new();
         if let Some(login) = user["login"].as_str() {
             owners.push(OwnerInfo { login: login.to_string(), kind: "user".into() });
         }
         for page in 1.. {
             let path = format!("/user/orgs?per_page=100&page={page}");
-            let batch: Vec<Value> = serde_json::from_value(self.get_json(&path).await?)
+            let batch: Vec<Value> = serde_json::from_value(self.get_json_maybe_forced(&path, force).await?)
                 .map_err(|e| GhError::Api { status: StatusCode::OK, body: format!("unexpected response from /user/orgs: {e}") })?;
             let n = batch.len();
             for o in &batch {
@@ -346,7 +363,7 @@ impl GithubClient {
     /// For an organization we hit `/orgs/{owner}/repos`; for the authenticated personal account
     /// we hit `/user/repos?affiliation=owner` (the `/users/{u}/repos` endpoint omits private repos
     /// and `permissions`, so it can't be used for the signed-in user).
-    pub async fn list_repos_for_owner(&self, owner: &str, is_org: bool) -> GhResult<Vec<RepoInfo>> {
+    pub async fn list_repos_for_owner(&self, owner: &str, is_org: bool, force: bool) -> GhResult<Vec<RepoInfo>> {
         let mut repos = Vec::new();
         for page in 1.. {
             let path = if is_org {
@@ -354,7 +371,7 @@ impl GithubClient {
             } else {
                 format!("/user/repos?per_page=100&page={page}&affiliation=owner&sort=full_name")
             };
-            let batch: Vec<Value> = serde_json::from_value(self.get_json(&path).await?)
+            let batch: Vec<Value> = serde_json::from_value(self.get_json_maybe_forced(&path, force).await?)
                 .map_err(|e| GhError::Api { status: StatusCode::OK, body: format!("unexpected response from {path}: {e}") })?;
             let n = batch.len();
             for r in &batch {

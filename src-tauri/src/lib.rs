@@ -20,6 +20,7 @@ pub fn run() {
             commands::list_repos,
             commands::list_owners,
             commands::list_repos_for_owner,
+            commands::refresh_repos_for_owner,
             commands::list_org_teams,
             commands::list_team_repos,
             commands::audit,

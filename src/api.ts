@@ -12,6 +12,9 @@ export const listRepos = () => invoke<RepoInfo[]>("list_repos");
 export const listOwners = () => invoke<OwnerInfo[]>("list_owners");
 export const listReposForOwner = (owner: string, isOrg: boolean) =>
   invoke<RepoInfo[]>("list_repos_for_owner", { owner, isOrg });
+// Forced refresh: bypasses the ETag cache so newly created repos show up.
+export const refreshReposForOwner = (owner: string, isOrg: boolean) =>
+  invoke<RepoInfo[]>("refresh_repos_for_owner", { owner, isOrg });
 export const listOrgTeams = (org: string) => invoke<TeamInfo[]>("list_org_teams", { org });
 export const listTeamRepos = (org: string, teamSlug: string) =>
   invoke<string[]>("list_team_repos", { org, teamSlug });

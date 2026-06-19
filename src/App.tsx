@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { applySync, audit, listOrgTeams, listOwners, listReposForOwner, listTeamRepos, logout } from "./api";
+import { applySync, audit, listOrgTeams, listOwners, listReposForOwner, listTeamRepos, logout, refreshReposForOwner } from "./api";
 import type { AuditRepoEvent, AuditResult, AuditStartedEvent, OwnerInfo, RepoInfo, RepoSyncResult, SettingChange, TeamInfo, UserInfo } from "./types";
 import { AuthView } from "./views/AuthView";
 import { ReposView } from "./views/ReposView";
@@ -87,6 +87,21 @@ export default function App() {
       .finally(() => { if (!cancelled) setTeamBusy(false); });
     return () => { cancelled = true; };
   }, [ownerFilter, teamSlug]);
+
+  // Forced refresh of the current owner's repos: purges the ETag cache server-side so a repo
+  // created after the list was first cached shows up. Guarded by reposBusy so a held-down click
+  // can't fire overlapping requests (and the "pick an owner" guardrail still applies).
+  const refreshRepos = useCallback(() => {
+    if (ownerFilter === "" || reposBusy) return;
+    const isOrg = owners.find((o) => o.login === ownerFilter)?.kind === "org";
+    let cancelled = false;
+    setReposBusy(true);
+    refreshReposForOwner(ownerFilter, isOrg)
+      .then((list) => { if (!cancelled) setRepos(list); })
+      .catch((e) => { if (!cancelled) handleError(e); })
+      .finally(() => { if (!cancelled) setReposBusy(false); });
+    return () => { cancelled = true; };
+  }, [ownerFilter, owners, reposBusy, handleError]);
 
   const onLogin = useCallback(async (u: UserInfo) => {
     setUser(u);
@@ -195,6 +210,7 @@ export default function App() {
           onSearch={setSearch}
           owner={ownerFilter}
           onOwner={setOwnerFilter}
+          onRefresh={refreshRepos}
           teamSlug={teamSlug}
           onTeamSlug={setTeamSlug}
           teams={teams}
