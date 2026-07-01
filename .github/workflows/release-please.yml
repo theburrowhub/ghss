@@ -1,0 +1,30 @@
+name: Release Please
+
+# Automatiza el versionado: en cada push a main, release-please mantiene un PR
+# de release (bump de versión + CHANGELOG según los commits convencionales).
+# Al mergear ese PR, crea el tag vX.Y.Z, que dispara el workflow Release (release.yml)
+# que construye los binarios y actualiza el tap de Homebrew.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          # IMPORTANTE: el tag creado por release-please debe disparar release.yml
+          # (que escucha `push: tags: ["v*"]`). Un tag creado con el GITHUB_TOKEN por
+          # defecto NO dispara otros workflows. Configura un PAT en el secret
+          # RELEASE_PLEASE_TOKEN (scope: contents+pull-requests, o repo) para que el
+          # release se construya solo. Sin ese secret, el PR/tag se crean igualmente,
+          # pero habrá que re-empujar el tag a mano (o usar workflow_dispatch) para
+          # disparar el build.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
