@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { DiffTree } from "../components/DiffTree";
 import { friendlyError } from "./StatusBar";
 import type { AuditResult, SettingChange } from "../types";
+import { CATEGORY_LABELS, CATEGORY_ORDER } from "../types";
 
 interface Props {
   reference: string;
@@ -18,6 +19,9 @@ export function AuditView({ reference, result, onBack, onSync, onStatus, busy }:
   const [selected, setSelected] = useState<Set<string>>(new Set());
   // Per webhook-change override of the destination URL, keyed by `${repo}::${key}`.
   const [urlOverrides, setUrlOverrides] = useState<Record<string, string>>({});
+  // Repos excluded from the sync entirely: their selected changes are kept (so re-enabling
+  // restores them) but they are dropped from the plans.
+  const [disabledRepos, setDisabledRepos] = useState<Set<string>>(new Set());
   const known = useRef<Set<string>>(new Set());
 
   const streaming = result.streaming === true;
@@ -55,7 +59,34 @@ export function AuditView({ reference, result, onBack, onSync, onStatus, busy }:
   const selectAll = () => setSelected(new Set(allKeys));
   const deselectAll = () => setSelected(new Set());
 
+  // Categories present across all diverged repos, with their applicable change keys.
+  // Toggling one selects/deselects that category in EVERY repo at once.
+  const catStats = useMemo(() => {
+    return CATEGORY_ORDER.map((cat) => {
+      const keys: string[] = [];
+      for (const d of diverged) for (const c of d.changes) if (c.applicable && c.category === cat) keys.push(`${d.repo}::${c.key}`);
+      return { cat, keys };
+    }).filter((g) => g.keys.length > 0);
+  }, [diverged]);
+
+  const toggleCatGlobal = (keys: string[]) => {
+    const allOn = keys.every((k) => selected.has(k));
+    setSelected((prev) => {
+      const next = new Set(prev);
+      keys.forEach((k) => (allOn ? next.delete(k) : next.add(k)));
+      return next;
+    });
+  };
+
+  const toggleRepoDisabled = (repo: string) =>
+    setDisabledRepos((prev) => {
+      const n = new Set(prev);
+      n.has(repo) ? n.delete(repo) : n.add(repo);
+      return n;
+    });
+
   const plans = diverged
+    .filter((d) => !disabledRepos.has(d.repo))
     .map((d) => ({
       repo: d.repo,
       changes: d.changes
@@ -107,6 +138,26 @@ export function AuditView({ reference, result, onBack, onSync, onStatus, busy }:
         <span className="muted">{selectedCount} of {allKeys.length} changes selected · {diverged.length} divergent repos</span>
       </div>
 
+      {catStats.length > 0 && (
+        <div className="list-toolbar cat-toolbar">
+          <span className="muted">Toggle a category across all repos:</span>
+          {catStats.map(({ cat, keys }) => {
+            const on = keys.filter((k) => selected.has(k)).length;
+            return (
+              <label key={cat} className="cat-toggle">
+                <input
+                  type="checkbox"
+                  checked={on === keys.length}
+                  ref={(el) => { if (el) el.indeterminate = on > 0 && on < keys.length; }}
+                  onChange={() => toggleCatGlobal(keys)}
+                />
+                {CATEGORY_LABELS[cat]} <span className="muted">{on}/{keys.length}</span>
+              </label>
+            );
+          })}
+        </div>
+      )}
+
       {result.errors.map(([repo, err]) => (
         <div className="card" key={repo} style={{ marginBottom: 8, borderColor: "var(--danger)" }}>
           <span className="mono">{repo}</span> <span className="badge err">not audited</span> <span className="muted">{friendlyError(err)}</span>
@@ -117,23 +168,38 @@ export function AuditView({ reference, result, onBack, onSync, onStatus, busy }:
         const isOpen = open.has(d.repo);
         const repoSelected = d.changes.filter((c) => c.applicable && selected.has(`${d.repo}::${c.key}`)).length;
         const repoApplicable = d.changes.filter((c) => c.applicable).length;
+        const disabled = disabledRepos.has(d.repo);
         return (
           <div className="card" key={d.repo} style={{ marginBottom: 8 }}>
-            <div
-              style={{ display: "flex", gap: 10, alignItems: "center", cursor: "pointer" }}
-              onClick={() => setOpen((prev) => { const n = new Set(prev); n.has(d.repo) ? n.delete(d.repo) : n.add(d.repo); return n; })}
-            >
-              <span>{isOpen ? "▼" : "▶"}</span>
-              <span className="mono">{d.repo}</span>
-              {d.changes.length === 0
-                ? <span className="badge ok">✓ in sync</span>
-                : <span className="badge diff">✗ {d.changes.length} differences</span>}
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
               {d.changes.length > 0 && (
-                <span className="muted" style={{ marginLeft: "auto" }}>{repoSelected}/{repoApplicable} selected</span>
+                <input
+                  type="checkbox"
+                  aria-label={`Include ${d.repo} in the sync`}
+                  title={disabled ? "Excluded — check to include this repo in the sync" : "Included — uncheck to exclude this repo from the sync"}
+                  checked={!disabled}
+                  onChange={() => toggleRepoDisabled(d.repo)}
+                />
               )}
+              <span
+                style={{ display: "flex", gap: 10, alignItems: "center", cursor: "pointer", flex: 1 }}
+                onClick={() => setOpen((prev) => { const n = new Set(prev); n.has(d.repo) ? n.delete(d.repo) : n.add(d.repo); return n; })}
+              >
+                <span>{isOpen ? "▼" : "▶"}</span>
+                <span className="mono">{d.repo}</span>
+                {d.changes.length === 0
+                  ? <span className="badge ok">✓ in sync</span>
+                  : <span className="badge diff">✗ {d.changes.length} differences</span>}
+                {disabled && <span className="badge muted">excluded</span>}
+                {d.changes.length > 0 && (
+                  <span className="muted" style={{ marginLeft: "auto" }}>
+                    {disabled ? "won't be applied" : `${repoSelected}/${repoApplicable} selected`}
+                  </span>
+                )}
+              </span>
             </div>
             {isOpen && d.changes.length > 0 && (
-              <div style={{ marginTop: 10 }}>
+              <div style={{ marginTop: 10, opacity: disabled ? 0.45 : 1 }}>
                 <DiffTree
                   changes={d.changes}
                   selectable={true}

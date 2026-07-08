@@ -77,11 +77,9 @@ export function ReposView(props: Props) {
     onTargets(next);
   };
 
-  const deselectAll = () => {
-    const next = new Set(targets);
-    selectableVisible.forEach((r) => next.delete(r.full_name));
-    onTargets(next);
-  };
+  // Clears ALL selected targets, including ones hidden by the current filter
+  // (search/team/owner), not just the visible rows.
+  const deselectAll = () => onTargets(new Set());
 
   return (
     <div className="view">
@@ -150,9 +148,10 @@ export function ReposView(props: Props) {
         <button onClick={selectAll} disabled={selectableVisible.length === 0 || allSelected}>
           Select all ({selectableVisible.length})
         </button>
-        <button onClick={deselectAll} disabled={selectedVisible === 0}>Deselect all</button>
+        <button onClick={deselectAll} disabled={targets.size === 0}>Deselect all ({targets.size})</button>
         <span className="muted">
           {selectedVisible} of {selectableVisible.length} selectable in current filter
+          {targets.size > selectedVisible && ` · ${targets.size} selected in total`}
         </span>
       </div>
 

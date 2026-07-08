@@ -102,6 +102,9 @@ input[type="text"], input[type="password"] {
 
 /* Bulk list-action toolbar. */
 .list-toolbar { display: flex; align-items: center; gap: 12px; margin: 0 0 8px; }
+.cat-toolbar { flex-wrap: wrap; gap: 8px; }
+.cat-toggle { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; cursor: pointer; padding: 3px 10px; border: 1px solid var(--border); border-radius: 999px; user-select: none; }
+.cat-toggle:hover { border-color: var(--accent); }
 
 .diff-cat { margin-bottom: 4px; }
 .diff-cat-header { display: flex; align-items: center; gap: 8px; padding: 6px 8px; cursor: pointer; border-radius: 6px; }
