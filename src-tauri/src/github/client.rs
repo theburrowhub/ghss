@@ -74,6 +74,13 @@ impl GithubClient {
         self.snapshot_cache.lock().unwrap().remove(&format!("{owner}/{name}"));
     }
 
+    /// Vacía ambas cachés (ETags y snapshots). Los `Arc` se comparten entre todos los clones del
+    /// cliente (audit clona por repo), así que la purga afecta también a los clones en vuelo.
+    pub fn clear_caches(&self) {
+        self.cache.lock().unwrap().clear();
+        self.snapshot_cache.lock().unwrap().clear();
+    }
+
     pub fn api_base() -> String {
         "https://api.github.com".into()
     }

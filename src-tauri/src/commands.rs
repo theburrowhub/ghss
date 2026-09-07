@@ -4,12 +4,16 @@ use crate::github::{GhError, GithubClient};
 use crate::model::*;
 use crate::sync::{apply_actions, plan_actions, ActionResult};
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::RwLock;
 
 #[derive(Default)]
 pub struct AppState {
     pub client: RwLock<Option<GithubClient>>,
+    /// El usuario pulsó "Sign out" en esta ejecución: suprime el auto-login de `auth_load_saved`
+    /// hasta el próximo login explícito o hasta que se reinicie la app.
+    pub signed_out: AtomicBool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -41,6 +45,8 @@ async fn login_with_token(state: &State<'_, AppState>, token: String) -> CmdResu
         scope_warning,
     };
     *state.client.write().await = Some(client);
+    // Cualquier login explícito (gh / PAT / device) rehabilita el auto-login futuro.
+    state.signed_out.store(false, Ordering::Relaxed);
     Ok(info)
 }
 
@@ -61,6 +67,10 @@ pub async fn auth_with_pat(state: State<'_, AppState>, pat: String, save: bool) 
 
 #[tauri::command]
 pub async fn auth_load_saved(state: State<'_, AppState>) -> CmdResult<Option<UserInfo>> {
+    // El usuario cerró sesión explícitamente en esta ejecución: no reconectar solo.
+    if state.signed_out.load(Ordering::Relaxed) {
+        return Ok(None);
+    }
     if let Some(pat) = auth::load_pat() {
         if let Ok(info) = login_with_token(&state, pat).await {
             return Ok(Some(info));
@@ -90,9 +100,28 @@ pub async fn auth_device_poll(state: State<'_, AppState>, client_id: String, dev
 
 #[tauri::command]
 pub async fn logout(state: State<'_, AppState>) -> CmdResult<()> {
-    auth::delete_pat();
+    // Conserva el PAT guardado en el keychain (el usuario puede quererlo para volver a entrar,
+    // o para iniciar sesión con otro mecanismo sin perderlo). "Forget saved token" lo borra aparte.
+    state.signed_out.store(true, Ordering::Relaxed);
     *state.client.write().await = None;
     Ok(())
+}
+
+/// Purga ambas cachés del cliente activo (ETags y snapshots). No-op si no hay sesión.
+#[tauri::command]
+pub async fn clear_cache(state: State<'_, AppState>) -> CmdResult<()> {
+    if let Some(c) = state.client.read().await.as_ref() {
+        c.clear_caches();
+    }
+    Ok(())
+}
+
+/// Borra el PAT guardado en el keychain. Devuelve si había alguno para un mensaje honesto en la UI.
+#[tauri::command]
+pub async fn forget_saved_token() -> CmdResult<bool> {
+    let had = auth::load_pat().is_some();
+    auth::delete_pat();
+    Ok(had)
 }
 
 async fn client(state: &State<'_, AppState>) -> CmdResult<GithubClient> {

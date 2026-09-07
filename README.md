@@ -125,6 +125,19 @@ Requiere registrar una OAuth App propia en GitHub y proporcionar el **Client ID*
 
 Para registrar la OAuth App: GitHub → Settings → Developer settings → OAuth Apps → New OAuth App. No necesita callback URL (es Device Flow).
 
+### Sesión y caché
+
+El auto-login (reconexión con el PAT del keychain o con `gh auth token`) solo ocurre al arrancar
+la app. **Sign out** cierra la sesión activa y te devuelve al selector de método sin volver a
+conectar solo, pero **conserva** el PAT guardado en el keychain — para borrarlo, usa "Forget saved
+token" en la pestaña de PAT. Al reiniciar la app, el auto-login vuelve a intentarse con lo que
+haya guardado.
+
+El botón **↻ Clear cache** de la barra superior (visible en cualquier pantalla) purga las cachés
+en memoria del cliente de GitHub: la de ETags de listados (repos, owners, orgs…) y la de snapshots
+de settings/rulesets por repo (TTL de 60 s). Úsalo si necesitas datos frescos de inmediato en vez
+de esperar al TTL o de reconectar.
+
 ---
 
 ## Categorías sincronizables

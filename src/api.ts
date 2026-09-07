@@ -8,6 +8,10 @@ export const authDeviceStart = (clientId: string) => invoke<DeviceStart>("auth_d
 export const authDevicePoll = (clientId: string, deviceCode: string) =>
   invoke<UserInfo | null>("auth_device_poll", { clientId, deviceCode });
 export const logout = () => invoke<void>("logout");
+// Purges the ETag + snapshot caches of the active GitHub client (no-op if not authenticated).
+export const clearCache = () => invoke<void>("clear_cache");
+// Deletes the PAT saved in the keychain; returns whether one existed.
+export const forgetSavedToken = () => invoke<boolean>("forget_saved_token");
 export const listRepos = () => invoke<RepoInfo[]>("list_repos");
 export const listOwners = () => invoke<OwnerInfo[]>("list_owners");
 export const listReposForOwner = (owner: string, isOrg: boolean) =>
