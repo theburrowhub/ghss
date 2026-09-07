@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { authDevicePoll, authDeviceStart, authLoadSaved, authWithGh, authWithPat } from "../api";
+import { authDevicePoll, authDeviceStart, authLoadSaved, authWithGh, authWithPat, forgetSavedToken } from "../api";
 import { friendlyError } from "./StatusBar";
 import type { DeviceStart, UserInfo } from "../types";
 
@@ -13,6 +13,7 @@ export function AuthView({ onLogin }: { onLogin: (u: UserInfo) => void }) {
   const [device, setDevice] = useState<DeviceStart | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [forgetMsg, setForgetMsg] = useState<string | null>(null);
   const polling = useRef(false);
 
   useEffect(() => {
@@ -62,6 +63,16 @@ export function AuthView({ onLogin }: { onLogin: (u: UserInfo) => void }) {
 
   useEffect(() => () => { polling.current = false; }, []);
 
+  const doForgetToken = async () => {
+    setForgetMsg(null);
+    try {
+      const had = await forgetSavedToken();
+      setForgetMsg(had ? "Saved token removed." : "No saved token.");
+    } catch (e) {
+      setForgetMsg(String(e));
+    }
+  };
+
   return (
     <div className="view" style={{ display: "grid", placeItems: "center" }}>
       <div className="card" style={{ width: 440 }}>
@@ -87,6 +98,14 @@ export function AuthView({ onLogin }: { onLogin: (u: UserInfo) => void }) {
               <input type="checkbox" checked={savePat} onChange={(e) => setSavePat(e.target.checked)} /> Save to the system keychain
             </label>
             <button className="primary" disabled={busy || !pat} onClick={() => run(() => authWithPat(pat, savePat))}>Connect</button>
+            <button
+              style={{ marginLeft: 8 }}
+              title="Delete any PAT saved in the system keychain (Sign out keeps it)"
+              onClick={doForgetToken}
+            >
+              Forget saved token
+            </button>
+            {forgetMsg && <p className="muted" style={{ marginTop: 6 }}>{forgetMsg}</p>}
           </>
         )}
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { applySync, audit, listOrgTeams, listOwners, listReposForOwner, listTeamRepos, logout, refreshReposForOwner } from "./api";
+import { applySync, audit, clearCache, listOrgTeams, listOwners, listReposForOwner, listTeamRepos, logout, refreshReposForOwner } from "./api";
 import type { AuditRepoEvent, AuditResult, AuditStartedEvent, OwnerInfo, RepoInfo, RepoSyncResult, SettingChange, TeamInfo, UserInfo } from "./types";
 import { AuthView } from "./views/AuthView";
 import { ReposView } from "./views/ReposView";
@@ -23,6 +23,7 @@ export default function App() {
   const [syncResults, setSyncResults] = useState<RepoSyncResult[] | null>(null);
   const [syncTotal, setSyncTotal] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [cacheBusy, setCacheBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [status, setStatus] = useState("");
@@ -177,6 +178,25 @@ export default function App() {
     setStage("auth");
   };
 
+  // Purges the GitHub client's ETag + snapshot caches (global: works from any screen). If we're
+  // looking at an owner's repo list, re-fetch it too so the purge is visible immediately.
+  const doClearCache = async () => {
+    setCacheBusy(true);
+    setError(null);
+    try {
+      await clearCache();
+      if (stage === "repos" && ownerFilter !== "") {
+        refreshRepos();
+      } else {
+        setStatus("GitHub cache cleared.");
+      }
+    } catch (e) {
+      handleError(e);
+    } finally {
+      setCacheBusy(false);
+    }
+  };
+
   return (
     <>
       <div className="topbar">
@@ -185,9 +205,16 @@ export default function App() {
         <div className="spacer" />
         {user && (
           <>
+            <button
+              title="Clear cache: purges GitHub ETag and settings-snapshot caches for this session"
+              disabled={cacheBusy || busy || auditResult?.streaming === true}
+              onClick={doClearCache}
+            >
+              {cacheBusy ? "Clearing…" : "↻ Clear cache"}
+            </button>
             <img className="avatar" src={user.avatar_url} alt="" />
             <span>{user.login}</span>
-            <button onClick={doLogout}>Sign out</button>
+            <button title="Sign out of this session (keeps any PAT saved in the keychain)" onClick={doLogout}>Sign out</button>
           </>
         )}
       </div>

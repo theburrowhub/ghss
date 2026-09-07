@@ -17,6 +17,8 @@ pub fn run() {
             commands::auth_device_start,
             commands::auth_device_poll,
             commands::logout,
+            commands::clear_cache,
+            commands::forget_saved_token,
             commands::list_repos,
             commands::list_owners,
             commands::list_repos_for_owner,
