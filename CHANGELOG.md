@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/theburrowhub/ghss/compare/v0.4.0...v0.4.1) (2026-09-08)
+
+
+### Bug Fixes
+
+* **ci:** keep release-please tags plain vX.Y.Z (no component prefix) ([#6](https://github.com/theburrowhub/ghss/issues/6)) ([a4d970b](https://github.com/theburrowhub/ghss/commit/a4d970b2cb1f198d3ef4831b8df0e47faab9518b))
+
 ## [0.4.0](https://github.com/theburrowhub/ghss/compare/ghss-v0.3.0...ghss-v0.4.0) (2026-09-07)
 
 
